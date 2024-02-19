@@ -1,4 +1,22 @@
 {
   "name": "dioma",
-  "packageManager": "yarn@4.1.0"
+  "version": "0.0.2",
+  "main": "src/index.js",
+  "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@vitest/ui": "latest",
+    "typescript": "^5.4.2",
+    "vite": "latest",
+    "vitest": "latest"
+  }
 }
