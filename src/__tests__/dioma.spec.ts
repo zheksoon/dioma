@@ -34,10 +34,12 @@ describe("Dioma", () => {
 
       const parentContainer = new Container();
 
+      // @ts-expect-error
       const instance1 = parentContainer.getInstance(ParentClass);
 
       const childContainer = parentContainer.childContainer();
 
+      // @ts-expect-error
       const instance2 = childContainer.getInstance(ParentClass);
 
       expect(instance1).toBeInstanceOf(ParentClass);

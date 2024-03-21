@@ -1,12 +1,11 @@
 {
   "compilerOptions": {
-    "target": "es2020",
-    "module": "node16",
+    "outDir": "./dist",
+    "rootDir": "./src",
     "strict": true,
-    "declaration": true,
-    "declarationMap": true,
+    "moduleResolution": "node",
     "sourceMap": true
   },
-  "include": ["src", "test"],
-  "exclude": ["node_modules"]
+  "include": ["src/dioma.ts"],
+  "exclude": ["node_modules", "dist", "src/**/*.spec.ts"]
 }

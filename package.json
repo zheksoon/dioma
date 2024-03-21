@@ -1,7 +1,6 @@
 {
   "name": "dioma",
-  "version": "0.0.2",
-  "main": "src/index.js",
+  "version": "0.0.3",
   "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
   "files": [
     "src",
@@ -11,12 +10,21 @@
     "package.json"
   ],
   "scripts": {
+    "build:es6": "tsc --outDir dist/es6 --module es6 --target es6 --declaration --declarationDir dist",
+    "build:common": "tsc --outDir dist/common --module commonjs --target es6",
+    "build:umd": "tsc --outDir dist/umd --module umd --target es5",
+    "build": "npm run build:es6 && npm run build:common && npm run build:umd",
     "test": "vitest"
   },
   "devDependencies": {
+    "@types/node": "^20.11.30",
     "@vitest/ui": "latest",
     "typescript": "^5.4.2",
     "vite": "latest",
     "vitest": "latest"
-  }
+  },
+  "types": "dist/dioma.d.ts",
+  "module": "dist/es6/dioma.js",
+  "main": "dist/common/dioma.js",
+  "umd:main": "dist/umd/dioma.js"
 }

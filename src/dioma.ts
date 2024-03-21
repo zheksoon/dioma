@@ -10,36 +10,6 @@ interface ScopedClass {
 
 export type Injectable<C extends I, I extends ScopedClass = ScopedClass> = InstanceType<I>;
 
-export const Scopes = {
-  Singleton(): Scope {
-    return function SingletonScope(cls) {
-      return globalContainer.getInstance(cls);
-    };
-  },
-
-  Transient(): Scope {
-    return function TransientScope(cls) {
-      return new cls();
-    };
-  },
-
-  Container(): Scope {
-    return function ContainerScope(cls, container) {
-      return container.getInstance(cls);
-    };
-  },
-
-  Resolution(): Scope {
-    return function ResolutionScope(cls, _, resolutionContainer) {
-      return resolutionContainer.getInstance(cls);
-    };
-  },
-
-  get Scoped() {
-    return Scopes.Container;
-  },
-} as const;
-
 export class Container {
   private instances = new WeakMap();
   private resolutionContainer: Container | null = null;
@@ -50,7 +20,7 @@ export class Container {
     return new Container(this);
   };
 
-  getInstance<T>(cls: new () => T, topLevel = true) {
+  private getInstance<T>(cls: new () => T, topLevel = true) {
     let instance = this.instances.get(cls);
 
     if (!instance && this.parentContainer) {
@@ -69,23 +39,51 @@ export class Container {
   inject = <T extends ScopedClass>(cls: T): InstanceType<T> => {
     let oldResolutionContainer = this.resolutionContainer;
 
-    if (!oldResolutionContainer) {
-      this.resolutionContainer = this.childContainer();
-    }
+    this.resolutionContainer ||= this.childContainer();
 
-    const scope = cls.scope ?? Scopes.Transient();
+    const scope = cls.scope || Scopes.Transient();
 
     try {
-      return scope(cls, this, this.resolutionContainer as Container);
+      return scope(cls, this, this.resolutionContainer);
     } finally {
       this.resolutionContainer = oldResolutionContainer;
     }
   };
 
   register = this.inject;
+
+  static Scopes = class Scopes {
+    public static Singleton(): Scope {
+      return function SingletonScope(cls) {
+        return globalContainer.getInstance(cls);
+      };
+    }
+
+    public static Transient(): Scope {
+      return function TransientScope(cls) {
+        return new cls();
+      };
+    }
+
+    public static Container(): Scope {
+      return function ContainerScope(cls, container) {
+        return container.getInstance(cls);
+      };
+    }
+
+    public static Resolution(): Scope {
+      return function ResolutionScope(cls, _, resolutionContainer) {
+        return resolutionContainer.getInstance(cls);
+      };
+    }
+
+    public static Scoped = Scopes.Container;
+  };
 }
 
 const globalContainer = new Container();
+
+export const Scopes = Container.Scopes;
 
 export const inject = globalContainer.inject;
 
