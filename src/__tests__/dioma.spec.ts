@@ -120,6 +120,20 @@ describe("Dioma", () => {
 
       expect(transient2).not.toBe(transient);
     });
+
+    it("uses transient scope by default", () => {
+      class DefaultClass {}
+
+      // @ts-expect-error
+      const instance1 = inject(DefaultClass);
+
+      // @ts-expect-error
+      const instance2 = inject(DefaultClass);
+
+      expect(instance1).toBeInstanceOf(DefaultClass);
+
+      expect(instance2).not.toBe(instance1);
+    });
   });
 
   describe("Scoped", () => {
