@@ -2,6 +2,20 @@
   "name": "dioma",
   "version": "0.0.3",
   "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
+  "keywords": [
+    "di",
+    "dependency injection",
+    "di container",
+    "inversion of control",
+    "ioc",
+    "ioc container",
+    "javascript",
+    "typescript",
+    "dioma",
+    "inversify",
+    "awilix",
+    "tsyringe"
+  ],
   "files": [
     "src",
     "dist",

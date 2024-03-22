@@ -2,8 +2,12 @@
 
 <p align="center">  
   <img src="https://github.com/zheksoon/dioma/blob/main/assets/dioma-logo.webp?raw=true" alt="dioma" width="200" />
-  <br/>
+</p>
+<p align="center">
   <b>Elegant dependency injection container for vanilla JavaScript and TypeScript</b>
+</p>
+<p align="center">
+  <img alt="npm package minimized gzipped size" src="https://img.shields.io/bundlejs/size/dioma?style=flat-square&label=gzip&color=%2364d4c1">
 </p>
 
 ## Features
