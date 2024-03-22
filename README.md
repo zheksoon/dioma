@@ -8,6 +8,7 @@
 </p>
 <p align="center">
   <img alt="npm package minimized gzipped size" src="https://img.shields.io/bundlejs/size/dioma?style=flat-square&label=gzip&color=%2364d4c1">
+  <img alt="Codecov" src="https://img.shields.io/codecov/c/github/zheksoon/dioma?style=flat-square&color=%2364d4c1">
 </p>
 
 ## Features
