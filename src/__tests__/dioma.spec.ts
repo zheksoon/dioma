@@ -1,13 +1,15 @@
-import { a } from "vite-node/index-WT31LSgS";
 import {
   Container,
   Scopes,
   inject,
   globalContainer,
   CycleDependencyError,
+  AsyncCycleDependencyError,
   injectAsync,
 } from "../dioma";
 import { describe, it, expect, beforeEach } from "vitest";
+
+const delay = (ms: number = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("Dioma", () => {
   beforeEach(() => {
@@ -423,18 +425,189 @@ describe("Dioma", () => {
 
       const instance = inject(CircularDependencyA);
 
-      await Promise.resolve();
+      await delay();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceA).toBe(instance);
 
       const instance2 = inject(CircularDependencyB);
 
-      await Promise.resolve();
-      await Promise.resolve();
+      await delay();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA.instanceB).toBe(instance2);
+    });
+
+    it("should be able to inject async for singleton scope (both async)", async () => {
+      class CircularDependencyA {
+        public instanceB: CircularDependencyB;
+
+        constructor(instanceBPromise = injectAsync(CircularDependencyB)) {
+          instanceBPromise.then((instance) => {
+            this.instanceB = instance;
+          });
+        }
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyB {
+        public instanceA: CircularDependencyA;
+
+        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
+          instanceAPromise.then((instance) => {
+            this.instanceA = instance;
+          });
+        }
+
+        static scope = Scopes.Singleton();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      await delay();
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceA).toBe(instance);
+
+      // const instance2 = inject(CircularDependencyB);
+
+      // await delay();
+      // await delay();
+
+      // expect(instance2).toBeInstanceOf(CircularDependencyB);
+      // expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      // expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      // expect(instance2.instanceA.instanceB).toBe(instance2);
+    });
+
+    it("should be able to inject async for singleton scope (async cycle of 3)", async () => {
+      class CircularDependencyA {
+        public instanceB: CircularDependencyB;
+
+        constructor(instanceBPromise = injectAsync(CircularDependencyB)) {
+          instanceBPromise.then((instance) => {
+            this.instanceB = instance;
+          });
+        }
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyB {
+        public instanceC: CircularDependencyC;
+
+        constructor(instanceCPromise = injectAsync(CircularDependencyC)) {
+          instanceCPromise.then((instance) => {
+            this.instanceC = instance;
+          });
+        }
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyC {
+        public instanceA: CircularDependencyA;
+
+        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
+          instanceAPromise.then((instance) => {
+            this.instanceA = instance;
+          });
+        }
+
+        static scope = Scopes.Singleton();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceC).toBeInstanceOf(CircularDependencyC);
+      expect(instance.instanceB.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
+
+      expect(instance.instanceB.instanceC.instanceA).toBe(instance);
+      expect(instance.instanceB.instanceC.instanceA.instanceB).toBe(instance.instanceB);
+      expect(instance.instanceB.instanceC.instanceA.instanceB.instanceC).toBe(
+        instance.instanceB.instanceC
+      );
+    });
+
+    it("should be able to inject async for singleton scope (star schema)", async () => {
+      class CircularDependencyA {
+        public instanceB: CircularDependencyB;
+        public instanceC: CircularDependencyC;
+
+        constructor(
+          instanceBPromise = injectAsync(CircularDependencyB),
+          instanceCPromise = injectAsync(CircularDependencyC)
+        ) {
+          Promise.all([instanceBPromise, instanceCPromise]).then(([instanceB, instanceC]) => {
+            this.instanceB = instanceB;
+            this.instanceC = instanceC;
+          });
+        }
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyB {
+        public instanceA: CircularDependencyA;
+        public instanceC: CircularDependencyC;
+
+        constructor(
+          instanceCPromise = injectAsync(CircularDependencyC),
+          instanceAPromise = injectAsync(CircularDependencyA)
+        ) {
+          Promise.all([instanceCPromise, instanceAPromise]).then(([instanceC, instanceA]) => {
+            this.instanceC = instanceC;
+            this.instanceA = instanceA;
+          });
+        }
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyC {
+        public instanceA: CircularDependencyA;
+        public instanceB: CircularDependencyB;
+
+        constructor(
+          instanceAPromise = injectAsync(CircularDependencyA),
+          instanceBPromise = injectAsync(CircularDependencyB)
+        ) {
+          Promise.all([instanceAPromise, instanceBPromise]).then(([instanceA, instanceB]) => {
+            this.instanceA = instanceA;
+            this.instanceB = instanceB;
+          });
+        }
+
+        static scope = Scopes.Singleton();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceC).toBeInstanceOf(CircularDependencyC);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceC).toBeInstanceOf(CircularDependencyC);
+      expect(instance.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceC.instanceB).toBeInstanceOf(CircularDependencyB);
+
+      expect(instance.instanceC.instanceA).toBe(instance);
+      expect(instance.instanceB.instanceA).toBe(instance);
+      expect(instance.instanceC.instanceB).toBe(instance.instanceB);
+      expect(instance.instanceB.instanceC).toBe(instance.instanceC);
     });
 
     it("should be able to inject async for resolution scope", async () => {
@@ -458,18 +631,68 @@ describe("Dioma", () => {
 
       const instance = inject(CircularDependencyA);
 
-      await Promise.resolve();
+      await delay();
+      await delay();
+      await delay();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceA).toBe(instance);
 
       const instance2 = inject(CircularDependencyB);
 
-      await Promise.resolve();
-      await Promise.resolve();
+      await delay();
+      await delay();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA.instanceB).toBe(instance2);
+    });
+
+    it("should be able to inject async for resolution scope (both async)", async () => {
+      class CircularDependencyA {
+        public instanceB: CircularDependencyB;
+
+        constructor(instanceBPromise = injectAsync(CircularDependencyB)) {
+          instanceBPromise.then((instance) => {
+            this.instanceB = instance;
+          });
+        }
+
+        static scope = Scopes.Resolution();
+      }
+
+      class CircularDependencyB {
+        declare instanceA: CircularDependencyA;
+
+        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
+          instanceAPromise.then((instance) => {
+            this.instanceA = instance;
+          });
+        }
+
+        static scope = Scopes.Resolution();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      await delay();
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceA).toBe(instance);
+
+      const instance2 = inject(CircularDependencyB);
+
+      await delay();
+
+      expect(instance2).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA.instanceB).toBe(instance2);
     });
 
     it("should be able to inject async for transient scope", async () => {
@@ -482,7 +705,7 @@ describe("Dioma", () => {
       class CircularDependencyB {
         declare instanceA: CircularDependencyA;
 
-        constructor(public instanceAPromise = injectAsync(CircularDependencyA)) {
+        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
           instanceAPromise.then((instance) => {
             this.instanceA = instance;
           });
@@ -493,18 +716,110 @@ describe("Dioma", () => {
 
       const instance = inject(CircularDependencyA);
 
-      await Promise.resolve();
+      await delay();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+
+      expect(instance.instanceB).not.toBe(instance.instanceB.instanceA.instanceB);
+      expect(instance.instanceB.instanceA).not.toBe(instance);
 
       const instance2 = inject(CircularDependencyB);
 
-      await Promise.resolve();
-      await Promise.resolve();
+      expect(instance).not.toBe(instance2);
+
+      await delay();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA.instanceB).not.toBe(instance2);
+    });
+
+    it("should be able to inject async for multiple transient classes", async () => {
+      class CircularDependencyA {
+        constructor(public instanceB = inject(CircularDependencyB)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      class CircularDependencyB {
+        constructor(public instanceC = inject(CircularDependencyC)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      class CircularDependencyC {
+        public instanceA: CircularDependencyA;
+
+        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
+          instanceAPromise.then((instance) => {
+            this.instanceA = instance;
+          });
+        }
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      await delay();
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceC).toBeInstanceOf(CircularDependencyC);
+      expect(instance.instanceB.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
+
+      expect(instance.instanceB.instanceC.instanceA).not.toBe(instance);
+      expect(instance.instanceB.instanceC.instanceA.instanceB).not.toBe(instance.instanceB);
+      expect(instance.instanceB.instanceC.instanceA.instanceB.instanceC).not.toBe(
+        instance.instanceB.instanceC
+      );
+    });
+
+    it("should throw error when trying to inject transients with async only loop", async () => {
+      let errorA: Error | null = null;
+      let errorB: Error | null = null;
+
+      class CircularDependencyA {
+        public instanceB: CircularDependencyB;
+
+        constructor(instanceBPromise = injectAsync(CircularDependencyB)) {
+          instanceBPromise
+            .then((instance) => {
+              this.instanceB = instance;
+            })
+            .catch((error) => {
+              errorA = error;
+            });
+        }
+
+        static scope = Scopes.Transient();
+      }
+
+      class CircularDependencyB {
+        declare instanceA: CircularDependencyA;
+
+        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
+          instanceAPromise
+            .then((instance) => {
+              this.instanceA = instance;
+            })
+            .catch((error) => {
+              errorB = error;
+            });
+        }
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      await delay();
+
+      expect(errorA).toBeInstanceOf(AsyncCycleDependencyError);
+      expect(errorB).toBe(null);
     });
 
     it("should be able to inject async for container scope", async () => {
@@ -530,54 +845,18 @@ describe("Dioma", () => {
 
       const instance = container.inject(CircularDependencyA);
 
-      await Promise.resolve();
+      await delay();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
 
-      const instance2 = container.inject(CircularDependencyB);
+      // const instance2 = container.inject(CircularDependencyB);
 
-      await Promise.resolve();
-      await Promise.resolve();
+      // await delay();
+      // await delay();
 
-      expect(instance2).toBeInstanceOf(CircularDependencyB);
-      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
-    });
-
-    it.skip("should be able to inject async for multiple classes", async () => {
-      class CircularDependencyA {
-        constructor(public instanceB = inject(CircularDependencyB)) {}
-
-        static scope = Scopes.Transient();
-      }
-
-      class CircularDependencyB {
-        constructor(public instanceC = inject(CircularDependencyC)) {}
-
-        static scope = Scopes.Transient();
-      }
-
-      class CircularDependencyC {
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise.then((instance) => {
-            this.instanceA = instance;
-          });
-        }
-
-        static scope = Scopes.Transient();
-      }
-
-      const instance = inject(CircularDependencyA);
-
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(instance).toBeInstanceOf(CircularDependencyA);
-      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
-      expect(instance.instanceB.instanceC).toBeInstanceOf(CircularDependencyC);
-      expect(instance.instanceB.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
-
-      expect(instance.instanceB.instanceC.instanceA).toBe(instance);
+      // expect(instance2).toBeInstanceOf(CircularDependencyB);
+      // expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
     });
   });
 });

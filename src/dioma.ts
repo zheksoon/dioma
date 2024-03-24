@@ -10,15 +10,19 @@ interface ScopedClass {
 
 export type Injectable<C extends I, I extends ScopedClass = ScopedClass> = InstanceType<I>;
 
-type Inject<T extends ScopedClass> = (
-  cls: T
-) => InstanceType<T> & { async: (cls: T) => Promise<InstanceType<T>> };
-
 export class CycleDependencyError extends Error {
   constructor() {
     super("Circular dependency detected");
   }
 }
+
+export class AsyncCycleDependencyError extends Error {
+  constructor() {
+    super("Circular dependency detected in async resolution");
+  }
+}
+
+const MAX_LOOP_COUNT = 100;
 
 export class Container {
   private instances = new WeakMap();
@@ -29,20 +33,24 @@ export class Container {
 
   private pendingPromiseMap = new Map<ScopedClass, Promise<InstanceType<ScopedClass>>>();
 
-  constructor(private parentContainer: Container | null = null) {}
+  constructor(private parentContainer: Container | null = null, public name?: string) {}
 
-  childContainer = () => {
-    return new Container(this);
+  loopCounter = 0;
+
+  childContainer = (name?: string) => {
+    return new Container(this, name);
   };
 
-  private getInstance<T>(cls: new () => T, topLevel = true) {
-    let instance = this.instances.get(cls);
+  private getInstance<T>(cls: new () => T) {
+    let instance: T | null = null;
+    let container: Container | null = this;
 
-    if (!instance && this.parentContainer) {
-      instance = this.parentContainer.getInstance(cls, false);
+    while (!instance && container) {
+      instance = container.instances.get(cls);
+      container = container.parentContainer;
     }
 
-    if (!instance && topLevel) {
+    if (!instance) {
       instance = new cls();
 
       this.instances.set(cls, instance);
@@ -55,30 +63,25 @@ export class Container {
     cls: T,
     resolutionContainer = this.resolutionContainer
   ): InstanceType<T> {
-    let oldResolutionContainer = resolutionContainer;
-
-    this.resolutionContainer ||= this.childContainer();
+    this.resolutionContainer = resolutionContainer || this.childContainer("ResolutionContainer");
 
     const scope = cls.scope || Scopes.Transient();
 
-    let instance: InstanceType<T> | undefined;
-
-    if (this.resolutionSet.has(cls)) {
-      this.resolutionSet.delete(cls);
-
-      throw new CycleDependencyError();
-    }
-
-    this.resolutionSet.add(cls);
-
     try {
-      instance = scope(cls, this, this.resolutionContainer);
+      if (this.resolutionSet.has(cls)) {
+        throw new CycleDependencyError();
+      }
 
-      return instance!;
+      this.resolutionSet.add(cls);
+
+      return scope(cls, this, this.resolutionContainer);
     } finally {
       this.resolutionSet.delete(cls);
+      this.resolutionContainer = resolutionContainer;
 
-      this.resolutionContainer = oldResolutionContainer;
+      if (!resolutionContainer) {
+        this.loopCounter = 0;
+      }
     }
   }
 
@@ -89,8 +92,18 @@ export class Container {
   injectAsync = <T extends ScopedClass>(cls: T): Promise<InstanceType<T>> => {
     const resolutionContainer = this.resolutionContainer;
 
+    this.loopCounter += 1;
+
+    if (this.loopCounter > MAX_LOOP_COUNT) {
+      throw new AsyncCycleDependencyError();
+    }
+
     if (this.pendingPromiseMap.has(cls)) {
       return this.pendingPromiseMap.get(cls) as Promise<InstanceType<T>>;
+    }
+
+    if (this.instances.has(cls)) {
+      return Promise.resolve(this.instances.get(cls));
     }
 
     const promise = Promise.resolve().then(() => {
