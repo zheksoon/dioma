@@ -10,7 +10,11 @@ interface ScopedClass {
 
 export type Injectable<C extends I, I extends ScopedClass = ScopedClass> = InstanceType<I>;
 
-class CycleDependencyError extends Error {
+type Inject<T extends ScopedClass> = (
+  cls: T
+) => InstanceType<T> & { async: (cls: T) => Promise<InstanceType<T>> };
+
+export class CycleDependencyError extends Error {
   constructor() {
     super("Circular dependency detected");
   }
@@ -21,7 +25,9 @@ export class Container {
 
   private resolutionContainer: Container | null = null;
 
-  private resolutionSet = new Set();
+  private resolutionSet = new Set<ScopedClass>();
+
+  private pendingPromiseMap = new Map<ScopedClass, Promise<InstanceType<ScopedClass>>>();
 
   constructor(private parentContainer: Container | null = null) {}
 
@@ -58,6 +64,8 @@ export class Container {
     let instance: InstanceType<T> | undefined;
 
     if (this.resolutionSet.has(cls)) {
+      this.resolutionSet.delete(cls);
+
       throw new CycleDependencyError();
     }
 
@@ -78,18 +86,31 @@ export class Container {
     return this.injectImpl(cls, undefined);
   };
 
-  injectAsync = async <T extends ScopedClass>(cls: T): Promise<InstanceType<T>> => {
+  injectAsync = <T extends ScopedClass>(cls: T): Promise<InstanceType<T>> => {
     const resolutionContainer = this.resolutionContainer;
 
-    return Promise.resolve().then(() => {
-      return this.injectImpl(cls, resolutionContainer);
-    });
-  };
+    if (this.pendingPromiseMap.has(cls)) {
+      return this.pendingPromiseMap.get(cls) as Promise<InstanceType<T>>;
+    }
 
-  register = this.inject;
+    const promise = Promise.resolve().then(() => {
+      try {
+        return this.injectImpl(cls, resolutionContainer);
+      } finally {
+        this.pendingPromiseMap.delete(cls);
+      }
+    });
+
+    this.pendingPromiseMap.set(cls, promise);
+
+    return promise;
+  };
 
   reset = () => {
     this.instances = new WeakMap();
+    this.resolutionSet = new Set();
+    this.pendingPromiseMap = new Map();
+    this.resolutionContainer = null;
   };
 
   static Scopes = class Scopes {
@@ -121,14 +142,12 @@ export class Container {
   };
 }
 
-const globalContainer = new Container();
+export const globalContainer = new Container();
 
 export const Scopes = Container.Scopes;
 
 export const inject = globalContainer.inject;
 
-inject.async = globalContainer.injectAsync;
+export const injectAsync = globalContainer.injectAsync;
 
 export const childContainer = globalContainer.childContainer;
-
-export const register = globalContainer.register;
