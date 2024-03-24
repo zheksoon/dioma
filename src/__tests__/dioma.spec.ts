@@ -383,7 +383,7 @@ describe("Dioma", () => {
     });
   });
 
-  describe.skip("Async", () => {
+  describe("Async", () => {
     it("should be able to inject async", async () => {
       class AsyncClass {
         static scope = Scopes.Transient();
@@ -394,11 +394,11 @@ describe("Dioma", () => {
       expect(instance).toBeInstanceOf(AsyncClass);
     });
 
-    it("should be able to break circular dependency with async", { timeout: 1000 }, async () => {
+    it("should be able to break circular dependency with async", async () => {
       class CircularDependencyA {
         constructor(public instanceB = inject(CircularDependencyB)) {}
 
-        static scope = Scopes.Transient();
+        static scope = Scopes.Resolution();
       }
 
       class CircularDependencyB {
@@ -421,13 +421,15 @@ describe("Dioma", () => {
 
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
 
-      // const instance2 = inject(CircularDependencyB);
+      const instance2 = inject(CircularDependencyB);
 
-      // await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
 
-      // expect(instance2).toBeInstanceOf(CircularDependencyB);
+      expect(instance2).toBeInstanceOf(CircularDependencyB);
 
-      // expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
     });
   });
 });

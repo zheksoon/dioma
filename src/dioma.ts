@@ -45,20 +45,23 @@ export class Container {
     return instance;
   }
 
-  inject = <T extends ScopedClass>(cls: T): InstanceType<T> => {
-    let oldResolutionContainer = this.resolutionContainer;
+  injectImpl<T extends ScopedClass>(
+    cls: T,
+    resolutionContainer = this.resolutionContainer
+  ): InstanceType<T> {
+    let oldResolutionContainer = resolutionContainer;
 
     this.resolutionContainer ||= this.childContainer();
 
     const scope = cls.scope || Scopes.Transient();
+
+    let instance: InstanceType<T> | undefined;
 
     if (this.resolutionSet.has(cls)) {
       throw new CycleDependencyError();
     }
 
     this.resolutionSet.add(cls);
-
-    let instance: InstanceType<T> | undefined;
 
     try {
       instance = scope(cls, this, this.resolutionContainer);
@@ -69,6 +72,18 @@ export class Container {
 
       this.resolutionContainer = oldResolutionContainer;
     }
+  }
+
+  inject = <T extends ScopedClass>(cls: T) => {
+    return this.injectImpl(cls, undefined);
+  };
+
+  injectAsync = async <T extends ScopedClass>(cls: T): Promise<InstanceType<T>> => {
+    const resolutionContainer = this.resolutionContainer;
+
+    return Promise.resolve().then(() => {
+      return this.injectImpl(cls, resolutionContainer);
+    });
   };
 
   register = this.inject;
@@ -111,6 +126,8 @@ const globalContainer = new Container();
 export const Scopes = Container.Scopes;
 
 export const inject = globalContainer.inject;
+
+inject.async = globalContainer.injectAsync;
 
 export const childContainer = globalContainer.childContainer;
 
