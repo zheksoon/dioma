@@ -10,9 +10,18 @@ interface ScopedClass {
 
 export type Injectable<C extends I, I extends ScopedClass = ScopedClass> = InstanceType<I>;
 
+class CycleDependencyError extends Error {
+  constructor() {
+    super("Circular dependency detected");
+  }
+}
+
 export class Container {
   private instances = new WeakMap();
+
   private resolutionContainer: Container | null = null;
+
+  private resolutionSet = new Set();
 
   constructor(private parentContainer: Container | null = null) {}
 
@@ -43,14 +52,30 @@ export class Container {
 
     const scope = cls.scope || Scopes.Transient();
 
+    if (this.resolutionSet.has(cls)) {
+      throw new CycleDependencyError();
+    }
+
+    this.resolutionSet.add(cls);
+
+    let instance: InstanceType<T> | undefined;
+
     try {
-      return scope(cls, this, this.resolutionContainer);
+      instance = scope(cls, this, this.resolutionContainer);
+
+      return instance!;
     } finally {
+      this.resolutionSet.delete(cls);
+
       this.resolutionContainer = oldResolutionContainer;
     }
   };
 
   register = this.inject;
+
+  reset = () => {
+    this.instances = new WeakMap();
+  };
 
   static Scopes = class Scopes {
     public static Singleton(): Scope {
