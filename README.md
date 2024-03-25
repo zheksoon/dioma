@@ -31,7 +31,7 @@ yarn add dioma
 ## Usage
 
 To start injecting dependencies you just need to add the `static scope` property to your class and use `inject` function to get the instance of a class.
-Here's an example of using it for Singleton and Transient scopes:
+Here's an example of using it for [Singleton](#singleton-scope) and [Transient](#transient-scope) scopes:
 
 ```typescript
 import { inject, Scopes } from "dioma";
@@ -84,7 +84,7 @@ Singleton scope creates a single instance of the class for the entire applicatio
 
 A simple example you can see in the [Usage](#Usage) section.
 
-Multiple singletons can be cross-referenced with each other using [async injection](#Async-injection-and-injection-cycles).
+Multiple singletons can be cross-referenced with each other using [async injection](#async-injection-and-circular-dependencies).
 
 ### Transient scope
 
