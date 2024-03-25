@@ -224,14 +224,14 @@ const container = new Container();
 const child = container.childContainer();
 
 class Land {
-  static scope = Scopes.Singleton();
+  static scope = Scopes.Container();
 }
 
 // register Land in the parent container
 container.inject(Land);
 
 class Garage {
-  // Land resolves to the singleton in the parent container
+  // Land resolves to the singleton from the the parent container
   constructor(private land = child.inject(Land)) {}
 
   open() {
@@ -308,7 +308,7 @@ Please note that async injection has an undefined behavior when used with `Scope
 
 ## TypeScript
 
-Dioma is written in TypeScript and provides type safety out of the box. It also supports generics:
+Dioma is written in TypeScript and provides type safety out of the box:
 
 ```typescript
 import { inject, Scopes, Injectable } from "dioma";
@@ -324,12 +324,12 @@ class Database implements Injectable<typeof Database> {
   static scope = Scopes.Singleton();
 }
 
-// bad, scope is not specified
+// error, scope is not specified
 class Repository implements Injectable<typeof Repository> {
   constructor(private db = inject(Database)) {}
 }
 
-inject(Repository); // type error
+inject(Repository); // type error, scope is not specified
 ```
 
 ## Author
