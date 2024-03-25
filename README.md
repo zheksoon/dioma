@@ -7,17 +7,18 @@
   <b>Elegant dependency injection container for vanilla JavaScript and TypeScript</b>
 </p>
 <p align="center">
-  <img alt="npm package minimized gzipped size" src="https://img.shields.io/bundlejs/size/dioma?style=flat-square&label=gzip&color=%2364d4c1">
+  <img alt="NPM Version" src="https://img.shields.io/npm/v/dioma?style=flat-square&color=%2364d4c1&link=https%3A%2F%2Fwww.npmjs.com%2Fpackage%2Fdioma">
+  <img alt="NPM package gzipped size" src="https://img.shields.io/bundlejs/size/dioma?style=flat-square&label=gzip&color=%2364d4c1">
   <img alt="Codecov" src="https://img.shields.io/codecov/c/github/zheksoon/dioma?style=flat-square&color=%2364d4c1">
 </p>
 
 ## Features
 
-- Just do it - no decorators, no annotations, no magic
-- No dependencies
-- Async injection and loop detection
-- TypeScript support
-- Tiny size
+- <b>Just do it</b> - no decorators, no annotations, no magic
+- <b>No</b> dependencies
+- <b>Async</b> injection and dependency cycles detection
+- <b>TypeScript</b> support
+- <b>Tiny</b> size
 
 ## Installation
 
@@ -29,32 +30,42 @@ yarn add dioma
 
 ## Usage
 
-To start injecting dependencies you just need to add a `static scope` property to your class and use `inject` function to get the instance of the class.
+To start injecting dependencies you just need to add the `static scope` property to your class and use `inject` function to get the instance of a class.
+Here's an example of using it for Singleton and Transient scopes:
 
 ```typescript
 import { inject, Scopes } from "dioma";
 
-class Engine {
-  start() {
-    console.log("Engine started");
+class Garage {
+  open() {
+    console.log("Garage opened");
   }
 
+  close() {
+    console.log("Garage closed");
+  }
+
+  // Single instance of the class for the entire application
   static scope = Scopes.Singleton();
 }
 
 class Car {
-  constructor(private engine = inject(Engine)) {}
+  constructor(private garage = inject(Garage)) {}
 
-  start() {
-    this.engine.start();
+  park() {
+    this.garage.open();
+    console.log("Car parked");
+    this.garage.close();
   }
 
+  // New instance of the class every time it is requested
   static scope = Scopes.Transient();
 }
 
+// Creates a new Car and injects Garage
 const car = inject(Car);
 
-car.start();
+car.park();
 ```
 
 ## Scopes
@@ -69,29 +80,11 @@ Dioma supports the following scopes:
 
 ### Singleton scope
 
-```typescript
-import { inject, Scopes } from "dioma";
+Singleton scope creates a single instance of the class for the entire application. The instances are stored in the global container, so any child containers will have access to it.
 
-class Engine {
-  start() {
-    console.log("Engine started");
-  }
+A simple example you can see in the [Usage](#Usage) section.
 
-  static scope = Scopes.Singleton();
-}
-
-class Car {
-  constructor(private engine = inject(Engine)) {}
-
-  start() {
-    this.engine.start();
-  }
-}
-
-const car = inject(Car);
-
-car.start();
-```
+Multiple singletons can be cross-referenced with each other using [async injection](#Async-injection-and-injection-cycles).
 
 ### Transient scope
 
@@ -114,10 +107,11 @@ class Dish {
 
 class Kitchen {
   constructor() {
-    this.dishes = [inject(Dish), inject(Dish), inject(Dish)]; // 3 different dishes
+    // 3 different dishes
+    this.dishes = [inject(Dish), inject(Dish), inject(Dish)];
   }
 
-  ealAll() {
+  eatAll() {
     this.dishes.forEach((dish) => dish.eat());
   }
 
@@ -129,38 +123,46 @@ const kitchen = inject(Kitchen);
 kitchen.ealAll();
 ```
 
+Transient scope instances can't be cross-referenced by the [async injection](#Async-injection-and-injection-cycles) as it's an infinite recursion.
+
 ### Container scope
 
-Container scope creates a single instance of the class per container.
+Container scope creates a single instance of the class per container. It's the same as the singleton, but relative to the custom container.
+
+The usage is the same as for the singleton scope, but you need to create a container first, and use `container.inject` instead of `inject`:
 
 ```typescript
-import { Scopes, Container } from "dioma";
+import { Container, Scopes } from "dioma";
 
 const container = new Container();
 
-class Engine {
-  start() {
-    console.log("Engine started");
+class Garage {
+  open() {
+    console.log("Garage opened");
+  }
+
+  close() {
+    console.log("Garage closed");
   }
 
   static scope = Scopes.Container();
 }
 
 class Car {
-  constructor(private engine = container.inject(Engine)) {
-    // this.engine is the same instance for all Car instances
+  constructor(private garage = container.inject(Garage)) {}
+
+  park() {
+    this.garage.open();
+    console.log("Car parked");
+    this.garage.close();
   }
 
-  start() {
-    this.engine.start();
-  }
-
-  static scope = Scopes.Container();
+  static scope = Scopes.Transient();
 }
 
 const car = container.inject(Car);
 
-car.start();
+car.park();
 ```
 
 ### Resolution scope
@@ -188,8 +190,11 @@ class Request {
   static scope = Scopes.Resolution();
 }
 
-class Repository {
-  constructor(private request = inject(Request), private query = inject(Query)) {
+class Handler {
+  constructor(
+    private request = inject(Request),
+    private query = inject(Query)
+  ) {
     // both this.query and this.request.query are the same instance
   }
 
@@ -204,7 +209,63 @@ class Repository {
 const repository = inject(Repository);
 ```
 
-## Async injection and injection cycles
+## Child containers
+
+You can create child containers to isolate the scope of the classes:
+
+<details>
+<summary>Here is an example</summary>
+
+```typescript
+import { Container, Scopes } from "dioma";
+
+const container = new Container();
+
+const child = container.childContainer();
+
+class Land {
+  static scope = Scopes.Singleton();
+}
+
+// register Land in the parent container
+container.inject(Land);
+
+class Garage {
+  // Land resolves to the singleton in the parent container
+  constructor(private land = child.inject(Land)) {}
+
+  open() {
+    console.log("Garage opened");
+  }
+
+  close() {
+    console.log("Garage closed");
+  }
+
+  static scope = Scopes.Container();
+}
+
+class Car {
+  constructor(private garage = child.inject(Garage)) {}
+
+  park() {
+    this.garage.open();
+    console.log("Car parked");
+    this.garage.close();
+  }
+
+  static scope = Scopes.Transient();
+}
+
+// car.garage is registered in the child container
+const car = child.inject(Car);
+
+car.park();
+```
+
+</details>
+
+## Async injection and circular dependencies
 
 When you have a circular dependency, there will be an error `Circular dependency detected`. To solve this problem, you can use async injection.
 
@@ -243,7 +304,33 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 await a.init();
 ```
 
-Please note that async injection has an undefined behavior when used with `Scopes.Transient()`. It may return an instance with unexpected loop, or throw the `Circular dependency detected in async resolution` error.
+Please note that async injection has an undefined behavior when used with `Scopes.Transient()`. It may return an instance with an unexpected loop, or throw the `Circular dependency detected in async resolution` error.
+
+## TypeScript
+
+Dioma is written in TypeScript and provides type safety out of the box. It also supports generics:
+
+```typescript
+import { inject, Scopes, Injectable } from "dioma";
+
+// good, scope is specified
+class Database implements Injectable<typeof Database> {
+  constructor(private url: string) {}
+
+  connect() {
+    console.log(`Connected to ${this.url}`);
+  }
+
+  static scope = Scopes.Singleton();
+}
+
+// bad, scope is not specified
+class Repository implements Injectable<typeof Repository> {
+  constructor(private db = inject(Database)) {}
+}
+
+inject(Repository); // type error
+```
 
 ## Author
 
