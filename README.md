@@ -15,6 +15,7 @@
 
 - Just do it - no decorators, no annotations, no magic
 - No dependencies
+- Async injection and loop detection
 - TypeScript support
 - Tiny size
 
@@ -27,8 +28,6 @@ yarn add dioma
 ```
 
 ## Usage
-
-### Basics
 
 To start injecting dependencies you just need to add a `static scope` property to your class and use `inject` function to get the instance of the class.
 
@@ -58,7 +57,7 @@ const car = inject(Car);
 car.start();
 ```
 
-### Scopes
+## Scopes
 
 Dioma supports the following scopes:
 
@@ -204,6 +203,47 @@ class Repository {
 
 const repository = inject(Repository);
 ```
+
+## Async injection and injection cycles
+
+When you have a circular dependency, there will be an error `Circular dependency detected`. To solve this problem, you can use async injection.
+
+```typescript
+import { inject, injectAsync, Scopes } from "dioma";
+
+class A {
+  constructor(private b = inject(B)) {}
+
+  async init() {
+    await this.b.init();
+  }
+
+  static scope = Scopes.Singleton();
+}
+
+class B {
+  constructor(aPromise = injectAsync(A)) {
+    aPromise.then((a) => {
+      this.a = a;
+    });
+  }
+
+  async init() {
+    await this.a.init();
+  }
+
+  static scope = Scopes.Singleton();
+}
+
+const a = inject(A);
+
+// all cycles are resolved by the end of the event loop
+await new Promise((resolve) => setTimeout(resolve, 0));
+
+await a.init();
+```
+
+Please note that async injection has an undefined behavior when used with `Scopes.Transient()`. It may return an instance with unexpected loop, or throw the `Circular dependency detected in async resolution` error.
 
 ## Author
 
