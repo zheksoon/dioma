@@ -1,6 +1,6 @@
 {
   "name": "dioma",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
   "keywords": [
     "di",
