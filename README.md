@@ -37,13 +37,7 @@ Here's an example of using it for [Singleton](#singleton-scope) and [Transient](
 import { inject, Scopes } from "dioma";
 
 class Garage {
-  open() {
-    console.log("Garage opened");
-  }
-
-  close() {
-    console.log("Garage closed");
-  }
+  open() { console.log("garage opened"); }
 
   // Single instance of the class for the entire application
   static scope = Scopes.Singleton();
@@ -54,8 +48,7 @@ class Car {
 
   park() {
     this.garage.open();
-    console.log("Car parked");
-    this.garage.close();
+    console.log("car parked");
   }
 
   // New instance of the class every time it is requested
@@ -65,7 +58,7 @@ class Car {
 // Creates a new Car and injects Garage
 const car = inject(Car);
 
-car.park();
+сar.park();
 ```
 
 ## Scopes
@@ -76,7 +69,7 @@ Dioma supports the following scopes:
 - `Scopes.Transient()` - creates a new instance of the class every time it is requested
 - `Scopes.Container()` - creates a single instance of the class per container
 - `Scopes.Resolution()` - creates a new instance of the class every time, but the instance is the same for the entire resolution
-- `Scopes.Scoped()` - the same as `Scoped.Container()`
+- `Scopes.Scoped()` - the same as `Scopes.Container()`
 
 ### Singleton scope
 
@@ -91,36 +84,27 @@ Multiple singletons can be cross-referenced with each other using [async injecti
 Transient scope creates a new instance of the class every time it is requested.
 
 ```typescript
-import { inject, Scopes } from "dioma";
+class Engine {
+  start() { console.log("Engine started"); }
 
-class Dish {
-  constructor() {
-    this.name = getRandomDish();
-  }
+  static scope = Scopes.Singleton();
+}
 
-  eat() {
-    console.log(`Eating ${this.name}`);
+class Vehicle {
+  constructor(private engine = inject(Engine)) {}
+
+  drive() {
+    this.engine.start();
+    console.log("Vehicle driving");
   }
 
   static scope = Scopes.Transient();
 }
 
-class Kitchen {
-  constructor() {
-    // 3 different dishes
-    this.dishes = [inject(Dish), inject(Dish), inject(Dish)];
-  }
+// new vehicle every time
+const vehicle = inject(Vehicle);
 
-  eatAll() {
-    this.dishes.forEach((dish) => dish.eat());
-  }
-
-  static scope = Scopes.Singleton();
-}
-
-const kitchen = inject(Kitchen);
-
-kitchen.ealAll();
+vehicle.drive();
 ```
 
 Transient scope instances can't be cross-referenced by the [async injection](#Async-injection-and-injection-cycles) as it's an infinite recursion.
@@ -137,32 +121,26 @@ import { Container, Scopes } from "dioma";
 const container = new Container();
 
 class Garage {
-  open() {
-    console.log("Garage opened");
-  }
+  open() { console.log("garage opened"); }
 
-  close() {
-    console.log("Garage closed");
-  }
-
+  // Single instance of the class for container where it's used
   static scope = Scopes.Container();
 }
 
 class Car {
+  // use contaner to inject the Garage, so it sticks to it
   constructor(private garage = container.inject(Garage)) {}
 
   park() {
     this.garage.open();
-    console.log("Car parked");
-    this.garage.close();
+    console.log("car parked");
   }
 
+  // New instance of the class every time it is requested
   static scope = Scopes.Transient();
 }
 
-const car = container.inject(Car);
-
-car.park();
+const car = inject(Car);
 ```
 
 ### Resolution scope
@@ -173,40 +151,32 @@ Resolution scope creates a new instance of the class every time, but the instanc
 import { inject, Scopes } from "dioma";
 
 class Query {
-  makeQuery() {
-    console.log("Query made");
-  }
+  constructor() {}
+
+  run() { console.log("Query run"); }
 
   static scope = Scopes.Resolution();
 }
 
-class Request {
-  constructor(private query = inject(Query)) {}
+class RequstHandler {
+  constructor(public query = inject(Query)) {}
 
-  makeRequest() {
-    this.query.makeQuery();
-  }
-
-  static scope = Scopes.Resolution();
+  static scope = Scopes.Resoltion();
 }
 
-class Handler {
+class RequestUser {
   constructor(
-    private request = inject(Request),
-    private query = inject(Query)
-  ) {
-    // both this.query and this.request.query are the same instance
-  }
-
-  makeRequest() {
-    this.request.makeRequest();
-    this.query.makeQuery();
-  }
+    public request = inject(RequestHandler),
+    public query = inject(Query),
+  ) {}
 
   static scope = Scopes.Transient();
 }
 
-const repository = inject(Repository);
+const requestUser = inject(RequestUser);
+
+// the same instance of Query is used for each of them
+requestUser.query === requestUser.request.query;
 ```
 
 ## Child containers
@@ -231,19 +201,16 @@ class Land {
 container.inject(Land);
 
 class Garage {
-  // Land resolves to the singleton from the the parent container
+  // Land resolves from the the parent container
   constructor(private land = child.inject(Land)) {}
 
-  open() {
-    console.log("Garage opened");
-  }
-
-  close() {
-    console.log("Garage closed");
-  }
+  open() { console.log("Garage opened"); }
 
   static scope = Scopes.Container();
 }
+
+// now Garage instance is stick to the child container
+child.inject(Garage);
 
 class Car {
   constructor(private garage = child.inject(Garage)) {}
@@ -251,13 +218,11 @@ class Car {
   park() {
     this.garage.open();
     console.log("Car parked");
-    this.garage.close();
   }
 
   static scope = Scopes.Transient();
 }
 
-// car.garage is registered in the child container
 const car = child.inject(Car);
 
 car.park();
@@ -275,22 +240,24 @@ import { inject, injectAsync, Scopes } from "dioma";
 class A {
   constructor(private b = inject(B)) {}
 
-  async init() {
-    await this.b.init();
+  doWork() {
+    console.log("doing work");
+    this.b.help();
   }
 
   static scope = Scopes.Singleton();
 }
 
 class B {
+  // injectAsync returns a promise of the A instance
   constructor(aPromise = injectAsync(A)) {
-    aPromise.then((a) => {
-      this.a = a;
+    aPromise.then((instance) => {
+      this.a = instance;
     });
   }
 
-  async init() {
-    await this.a.init();
+  help() {
+    console.log("helping with work")
   }
 
   static scope = Scopes.Singleton();
@@ -306,6 +273,8 @@ await a.init();
 
 Please note that async injection has an undefined behavior when used with `Scopes.Transient()`. It may return an instance with an unexpected loop, or throw the `Circular dependency detected in async resolution` error.
 
+As defined in the code above, you need to wait for the next tick to get all instance promises resolved. In this example, doing `const b = await injectAsync(B)` will only return instance with promise, not actual A, so it gets resolved only by the next tick.
+
 ## TypeScript
 
 Dioma is written in TypeScript and provides type safety out of the box:
@@ -313,7 +282,7 @@ Dioma is written in TypeScript and provides type safety out of the box:
 ```typescript
 import { inject, Scopes, Injectable } from "dioma";
 
-// good, scope is specified
+// Injectable interface makes sure the static scope is defined
 class Database implements Injectable<typeof Database> {
   constructor(private url: string) {}
 
@@ -329,7 +298,7 @@ class Repository implements Injectable<typeof Repository> {
   constructor(private db = inject(Database)) {}
 }
 
-inject(Repository); // type error, scope is not specified
+inject(Repository); // also type error, scope is not specified
 ```
 
 ## Author
