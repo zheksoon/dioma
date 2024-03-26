@@ -16,7 +16,7 @@
 
 - <b>Just do it</b> - no decorators, no annotations, no magic
 - <b>No</b> dependencies
-- <b>Async</b> injection and dependency cycles detection
+- <b>Async</b> injection and dependency cycle detection
 - <b>TypeScript</b> support
 - <b>Tiny</b> size
 
@@ -30,7 +30,7 @@ yarn add dioma
 
 ## Usage
 
-To start injecting dependencies you just need to add the `static scope` property to your class and use the `inject` function to get the instance of a class.
+To start injecting dependencies, you just need to add the `static scope` property to your class and use the `inject` function to get the instance of a class.
 Here's an example of using it for [Singleton](#singleton-scope) and [Transient](#transient-scope) scopes:
 
 ```typescript
@@ -51,7 +51,7 @@ class Car {
     console.log("car parked");
   }
 
-  // New instance of the class every time it is requested
+  // New instance of the class on every injection
   static scope = Scopes.Transient();
 }
 
@@ -66,14 +66,16 @@ const car = inject(Car);
 Dioma supports the following scopes:
 
 - `Scopes.Singleton()` - creates a single instance of the class
-- `Scopes.Transient()` - creates a new instance of the class every time it is requested
+- `Scopes.Transient()` - creates a new instance of the class on every injection
 - `Scopes.Container()` - creates a single instance of the class per container
 - `Scopes.Resolution()` - creates a new instance of the class every time, but the instance is the same for the entire resolution
-- `Scopes.Scoped()` - the same as `Scopes.Container()`
+- `Scopes.Scoped()` is the same as `Scopes.Container()`
 
 ### Singleton scope
 
-Singleton scope creates a single instance of the class for the entire application. The instances are stored in the global container, so any child containers will have access to it.
+Singleton scope creates a single instance of the class for the entire application. 
+The instances are stored in the global container, so anyone can access them.
+If you want to isolate the class to a specific container, use the [Container](#Container-scope) scope.
 
 A simple example you can see in the [Usage](#Usage) section.
 
@@ -81,9 +83,11 @@ Multiple singletons can be cross-referenced with each other using [async injecti
 
 ### Transient scope
 
-Transient scope creates a new instance of the class every time it is requested.
+Transient scope creates a new instance of the class on every injection:
 
 ```typescript
+import { inject, Scopes } from "dioma";
+
 class Engine {
   start() { console.log("Engine started"); }
 
@@ -101,7 +105,7 @@ class Vehicle {
   static scope = Scopes.Transient();
 }
 
-// new vehicle every time
+// New vehicle every time
 const vehicle = inject(Vehicle);
 
 vehicle.drive();
@@ -123,12 +127,15 @@ const container = new Container();
 class Garage {
   open() { console.log("garage opened"); }
 
-  // Single instance of the class for the container where it's used
+  // Single instance of the class for the container
   static scope = Scopes.Container();
 }
 
+// Register Garage on the container
+container.inject(Garage);
+
 class Car {
-  // use the container to inject the Garage, so it sticks to it
+  // Use inject method of the container for Garage
   constructor(private garage = container.inject(Garage)) {}
 
   park() {
@@ -136,7 +143,7 @@ class Car {
     console.log("car parked");
   }
 
-  // New instance of the class every time it is requested
+  // New instance on every injection
   static scope = Scopes.Transient();
 }
 
@@ -145,16 +152,12 @@ const car = inject(Car);
 
 ### Resolution scope
 
-Resolution scope creates a new instance of the class every time, but the instance is the same for the entire resolution.
+Resolution scope creates a new instance of the class every time, but the instance is the same for the entire resolution:
 
 ```typescript
 import { inject, Scopes } from "dioma";
 
 class Query {
-  constructor() {}
-
-  run() { console.log("Query run"); }
-
   static scope = Scopes.Resolution();
 }
 
@@ -175,16 +178,19 @@ class RequestUser {
 
 const requestUser = inject(RequestUser);
 
-// the same instance of Query is used for each of them
+// The same instance of Query is used for each of them
 requestUser.query === requestUser.request.query;
 ```
 
 ## Child containers
 
-You can create child containers to isolate the scope of the classes:
+You can create child containers to isolate the scope of the classes. 
+Child containers have a hierarchical structure, so Dioma searches in parent containers first. If no instance found, it creates it on the child itself.
+
+Here's an example of child containers usage:
 
 <details>
-<summary>Here is an example</summary>
+<summary><b>Here is an example</b></summary>
 
 ```typescript
 import { Container, Scopes } from "dioma";
@@ -197,11 +203,11 @@ class Land {
   static scope = Scopes.Container();
 }
 
-// register the Land class in the parent container
+// Register the Land class in the parent container
 container.inject(Land);
 
 class Garage {
-  // Land resolves from the the parent container
+  // Land resolves from the parent container
   constructor(private land = child.inject(Land)) {}
 
   open() { console.log("Garage opened"); }
@@ -209,7 +215,7 @@ class Garage {
   static scope = Scopes.Container();
 }
 
-// now Garage instance is stuck to the child container
+// Now Garage instance is stuck to the child container
 child.inject(Garage);
 
 class Car {
@@ -227,7 +233,6 @@ const car = child.inject(Car);
 
 car.park();
 ```
-
 </details>
 
 ## Async injection and circular dependencies
@@ -265,7 +270,7 @@ class B {
 
 const a = inject(A);
 
-// all cycles are resolved by the end of the event loop
+// All cycles are resolved on the next tick
 await new Promise((resolve) => setTimeout(resolve, 0));
 
 await a.init();
@@ -275,7 +280,7 @@ Please note that async injection has an undefined behavior when used with `Scope
 
 As defined in the code above, you need to wait for the next tick to get all instance promises resolved. 
 
-In this example, doing `const b = await injectAsync(B)` will only return an instance with promise, not actual A, so it gets resolved only by the next tick.
+In this example, doing `const b = await injectAsync(B)` will only return an instance with promise, not actual A, so it gets resolved only on the next tick.
 
 ## TypeScript
 
@@ -295,12 +300,12 @@ class Database implements Injectable<typeof Database> {
   static scope = Scopes.Singleton();
 }
 
-// error, scope is not specified
+// Error, scope is not specified
 class Repository implements Injectable<typeof Repository> {
   constructor(private db = inject(Database)) {}
 }
 
-inject(Repository); // also type error, scope is not specified
+inject(Repository); // Also type error, scope is not specified
 ```
 
 ## Author
