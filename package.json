@@ -1,6 +1,6 @@
 {
   "name": "dioma",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
   "keywords": [
     "di",
@@ -43,5 +43,10 @@
   "types": "dist/dioma.d.ts",
   "module": "dist/es6/dioma.js",
   "main": "dist/common/dioma.js",
-  "umd:main": "dist/umd/dioma.js"
+  "umd:main": "dist/umd/dioma.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zheksoon/dioma.git"
+  }
 }
