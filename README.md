@@ -30,7 +30,7 @@ yarn add dioma
 
 ## Usage
 
-To start injecting dependencies you just need to add the `static scope` property to your class and use `inject` function to get the instance of a class.
+To start injecting dependencies you just need to add the `static scope` property to your class and use the `inject` function to get the instance of a class.
 Here's an example of using it for [Singleton](#singleton-scope) and [Transient](#transient-scope) scopes:
 
 ```typescript
@@ -113,7 +113,7 @@ Transient scope instances can't be cross-referenced by the [async injection](#As
 
 Container scope creates a single instance of the class per container. It's the same as the singleton, but relative to the custom container.
 
-The usage is the same as for the singleton scope, but you need to create a container first, and use `container.inject` instead of `inject`:
+The usage is the same as for the singleton scope, but you need to create a container first and use `container.inject` instead of `inject`:
 
 ```typescript
 import { Container, Scopes } from "dioma";
@@ -123,12 +123,12 @@ const container = new Container();
 class Garage {
   open() { console.log("garage opened"); }
 
-  // Single instance of the class for container where it's used
+  // Single instance of the class for the container where it's used
   static scope = Scopes.Container();
 }
 
 class Car {
-  // use contaner to inject the Garage, so it sticks to it
+  // use the container to inject the Garage, so it sticks to it
   constructor(private garage = container.inject(Garage)) {}
 
   park() {
@@ -158,7 +158,7 @@ class Query {
   static scope = Scopes.Resolution();
 }
 
-class RequstHandler {
+class RequestHandler {
   constructor(public query = inject(Query)) {}
 
   static scope = Scopes.Resoltion();
@@ -197,7 +197,7 @@ class Land {
   static scope = Scopes.Container();
 }
 
-// register Land in the parent container
+// register the Land class in the parent container
 container.inject(Land);
 
 class Garage {
@@ -209,7 +209,7 @@ class Garage {
   static scope = Scopes.Container();
 }
 
-// now Garage instance is stick to the child container
+// now Garage instance is stuck to the child container
 child.inject(Garage);
 
 class Car {
@@ -273,7 +273,9 @@ await a.init();
 
 Please note that async injection has an undefined behavior when used with `Scopes.Transient()`. It may return an instance with an unexpected loop, or throw the `Circular dependency detected in async resolution` error.
 
-As defined in the code above, you need to wait for the next tick to get all instance promises resolved. In this example, doing `const b = await injectAsync(B)` will only return instance with promise, not actual A, so it gets resolved only by the next tick.
+As defined in the code above, you need to wait for the next tick to get all instance promises resolved. 
+
+In this example, doing `const b = await injectAsync(B)` will only return an instance with promise, not actual A, so it gets resolved only by the next tick.
 
 ## TypeScript
 
