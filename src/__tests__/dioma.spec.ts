@@ -6,6 +6,7 @@ import {
   CycleDependencyError,
   AsyncCycleDependencyError,
   injectAsync,
+  ArgumentsError,
 } from "../dioma";
 import { describe, it, expect, beforeEach } from "vitest";
 
@@ -857,6 +858,144 @@ describe("Dioma", () => {
 
       // expect(instance2).toBeInstanceOf(CircularDependencyB);
       // expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+    });
+  });
+
+  describe("Arguments", () => {
+    it("should be able to inject transient with arguments", () => {
+      class ArgumentClass {
+        constructor(public value: string) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = inject(ArgumentClass, "test");
+
+      expect(instance).toBeInstanceOf(ArgumentClass);
+      expect(instance.value).toBe("test");
+    });
+
+    it("should be able to inject multiple transient with arguments", () => {
+      class ArgumentClass {
+        constructor(public value: string) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = inject(ArgumentClass, "test");
+
+      expect(instance).toBeInstanceOf(ArgumentClass);
+      expect(instance.value).toBe("test");
+
+      const instance2 = inject(ArgumentClass, "test2");
+
+      expect(instance2).toBeInstanceOf(ArgumentClass);
+      expect(instance2.value).toBe("test2");
+    });
+
+    it("should be able to inject resolution with arguments", () => {
+      class ArgumentClass {
+        constructor(public value: string) {}
+
+        static scope = Scopes.Resolution();
+      }
+
+      const instance = inject(ArgumentClass, "test");
+
+      expect(instance).toBeInstanceOf(ArgumentClass);
+      expect(instance.value).toBe("test");
+    });
+
+    it("should cache first instance of resolution with arguments", () => {
+      class ArgumentClass {
+        constructor(public value: string) {}
+
+        static scope = Scopes.Resolution();
+      }
+
+      class InjectClass {
+        constructor(
+          public instance1 = inject(ArgumentClass, "test"),
+          public instance2 = inject(ArgumentClass, "test2")
+        ) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = inject(InjectClass);
+
+      expect(instance).toBeInstanceOf(InjectClass);
+
+      expect(instance.instance1).toBeInstanceOf(ArgumentClass);
+      expect(instance.instance1.value).toBe("test");
+
+      expect(instance.instance2).toBeInstanceOf(ArgumentClass);
+      expect(instance.instance2.value).toBe("test");
+    });
+
+    it("should throw error for singleton with arguments", () => {
+      class ArgumentClass {
+        constructor(public value: string) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      expect(() => inject(ArgumentClass, "test")).toThrowError(ArgumentsError);
+    });
+
+    it("should throw error for container with arguments", () => {
+      const container = new Container();
+
+      class ArgumentClass {
+        constructor(public value: string) {}
+
+        static scope = Scopes.Container();
+      }
+
+      expect(() => container.inject(ArgumentClass, "test")).toThrowError(ArgumentsError);
+    });
+
+    it("should be able to inject async with arguments", async () => {
+      class ArgumentClass {
+        constructor(public value: string) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = await injectAsync(ArgumentClass, "test");
+
+      expect(instance).toBeInstanceOf(ArgumentClass);
+      expect(instance.value).toBe("test");
+    });
+
+    it("should be able to inject async with arguments (loop)", async () => {
+      class ClassA {
+        constructor(public value: string, public instanceB = inject(ClassB, "hello")) {}
+
+        static scope = Scopes.Resolution();
+      }
+
+      class ClassB {
+        public instanceA: ClassA;
+
+        constructor(public value: string, aPromise = injectAsync(ClassA, "world")) {
+          aPromise.then((instance) => {
+            this.instanceA = instance;
+          });
+        }
+
+        static scope = Scopes.Transient();
+      }
+
+      const instanceB = inject(ClassB, "test");
+
+      await delay();
+
+      expect(instanceB).toBeInstanceOf(ClassB);
+      expect(instanceB.value).toBe("test");
+
+      expect(instanceB.instanceA).toBeInstanceOf(ClassA);
+      expect(instanceB.instanceA.value).toBe("world");
     });
   });
 });
