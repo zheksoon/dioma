@@ -37,7 +37,9 @@ Here's an example of using it for [Singleton](#singleton-scope) and [Transient](
 import { inject, Scopes } from "dioma";
 
 class Garage {
-  open() { console.log("garage opened"); }
+  open() {
+    console.log("garage opened");
+  }
 
   // Single instance of the class for the entire application
   static scope = Scopes.Singleton();
@@ -73,7 +75,7 @@ Dioma supports the following scopes:
 
 ### Singleton scope
 
-Singleton scope creates a single instance of the class for the entire application. 
+Singleton scope creates a single instance of the class for the entire application.
 The instances are stored in the global container, so anyone can access them.
 If you want to isolate the class to a specific container, use the [Container](#Container-scope) scope.
 
@@ -89,7 +91,9 @@ Transient scope creates a new instance of the class on every injection:
 import { inject, Scopes } from "dioma";
 
 class Engine {
-  start() { console.log("Engine started"); }
+  start() {
+    console.log("Engine started");
+  }
 
   static scope = Scopes.Singleton();
 }
@@ -125,7 +129,9 @@ import { Container, Scopes } from "dioma";
 const container = new Container();
 
 class Garage {
-  open() { console.log("garage opened"); }
+  open() {
+    console.log("garage opened");
+  }
 
   // Single instance of the class for the container
   static scope = Scopes.Container();
@@ -170,7 +176,7 @@ class RequestHandler {
 class RequestUser {
   constructor(
     public request = inject(RequestHandler),
-    public query = inject(Query),
+    public query = inject(Query)
   ) {}
 
   static scope = Scopes.Transient();
@@ -182,9 +188,38 @@ const requestUser = inject(RequestUser);
 requestUser.query === requestUser.request.query;
 ```
 
+## Injection with arguments
+
+You can pass arguments to the constructor when injecting a class:
+
+```typescript
+import { inject, Scopes } from "dioma";
+
+class Owner {
+  static scope = Scopes.Singleton();
+}
+
+class Pet {
+  constructor(public name: string, public owner = inject(Owner)) {}
+
+  pet() {
+    console.log(`${this.name} petted`);
+  }
+
+  static scope = Scopes.Transient();
+}
+
+const pet = inject(Pet, "Fluffy");
+
+pet.pet(); // Fluffy petted
+```
+
+Only transient and resolution scopes support argument injection.
+Resolution scope instances are cached for the entire resolution, so the arguments are passed only once.
+
 ## Child containers
 
-You can create child containers to isolate the scope of the classes. 
+You can create child containers to isolate the scope of the classes.
 Child containers have a hierarchical structure, so Dioma searches in parent containers first. If no instance found, it creates it on the child itself.
 
 Here's an example of child containers usage:
@@ -210,7 +245,9 @@ class Garage {
   // Land resolves from the parent container
   constructor(private land = child.inject(Land)) {}
 
-  open() { console.log("Garage opened"); }
+  open() {
+    console.log("Garage opened");
+  }
 
   static scope = Scopes.Container();
 }
@@ -233,6 +270,7 @@ const car = child.inject(Car);
 
 car.park();
 ```
+
 </details>
 
 ## Async injection and circular dependencies
@@ -262,7 +300,7 @@ class B {
   }
 
   help() {
-    console.log("helping with work")
+    console.log("helping with work");
   }
 
   static scope = Scopes.Singleton();
@@ -278,7 +316,7 @@ await a.init();
 
 Please note that async injection has an undefined behavior when used with `Scopes.Transient()`. It may return an instance with an unexpected loop, or throw the `Circular dependency detected in async resolution` error.
 
-As defined in the code above, you need to wait for the next tick to get all instance promises resolved. 
+As defined in the code above, you need to wait for the next tick to get all instance promises resolved.
 
 In this example, doing `const b = await injectAsync(B)` will only return an instance with promise, not actual A, so it gets resolved only on the next tick.
 
