@@ -1,4 +1,9 @@
-type InstanceResolver = (cls: any, container: Container, resolutionContainer: Container) => any;
+type InstanceResolver = (
+  cls: any,
+  args: any[],
+  container: Container,
+  resolutionContainer: Container
+) => any;
 
 export type Scope = InstanceResolver;
 
@@ -22,6 +27,12 @@ export class AsyncCycleDependencyError extends Error {
   }
 }
 
+export class ArgumentsError extends Error {
+  constructor(scope: string, className: string) {
+    super(`Arguments are not supported for ${scope} of ${className}`);
+  }
+}
+
 const MAX_LOOP_COUNT = 100;
 
 export class Container {
@@ -41,7 +52,7 @@ export class Container {
     return new Container(this, name);
   };
 
-  private getInstance<T>(cls: new () => T) {
+  private getInstance<T>(cls: new () => T, args: any[] = []) {
     let instance: T | null = null;
     let container: Container | null = this;
 
@@ -51,7 +62,8 @@ export class Container {
     }
 
     if (!instance) {
-      instance = new cls();
+      // @ts-expect-error
+      instance = new cls(...args);
 
       this.instances.set(cls, instance);
     }
@@ -59,8 +71,9 @@ export class Container {
     return instance;
   }
 
-  injectImpl<T extends ScopedClass>(
+  injectImpl<T extends ScopedClass, Args extends any[]>(
     cls: T,
+    args: Args,
     resolutionContainer = this.resolutionContainer
   ): InstanceType<T> {
     this.resolutionContainer = resolutionContainer || this.childContainer("ResolutionContainer");
@@ -74,7 +87,7 @@ export class Container {
 
       this.resolutionSet.add(cls);
 
-      return scope(cls, this, this.resolutionContainer);
+      return scope(cls, args, this, this.resolutionContainer);
     } finally {
       this.resolutionSet.delete(cls);
       this.resolutionContainer = resolutionContainer;
@@ -85,11 +98,14 @@ export class Container {
     }
   }
 
-  inject = <T extends ScopedClass>(cls: T) => {
-    return this.injectImpl(cls, undefined);
+  inject = <T extends ScopedClass, Args extends any[]>(cls: T, ...args: Args) => {
+    return this.injectImpl(cls, args, undefined);
   };
 
-  injectAsync = <T extends ScopedClass>(cls: T): Promise<InstanceType<T>> => {
+  injectAsync = <T extends ScopedClass, Args extends any[]>(
+    cls: T,
+    ...args: Args
+  ): Promise<InstanceType<T>> => {
     const resolutionContainer = this.resolutionContainer;
 
     this.loopCounter += 1;
@@ -108,7 +124,7 @@ export class Container {
 
     const promise = Promise.resolve().then(() => {
       try {
-        return this.injectImpl(cls, resolutionContainer);
+        return this.injectImpl(cls, args, resolutionContainer);
       } finally {
         this.pendingPromiseMap.delete(cls);
       }
@@ -128,26 +144,34 @@ export class Container {
 
   static Scopes = class Scopes {
     public static Singleton(): Scope {
-      return function SingletonScope(cls) {
+      return function SingletonScope(cls, args) {
+        if (args.length > 0) {
+          throw new ArgumentsError(SingletonScope.name, cls.name);
+        }
+
         return globalContainer.getInstance(cls);
       };
     }
 
     public static Transient(): Scope {
-      return function TransientScope(cls) {
-        return new cls();
+      return function TransientScope(cls, args) {
+        return new cls(...args);
       };
     }
 
     public static Container(): Scope {
-      return function ContainerScope(cls, container) {
+      return function ContainerScope(cls, args, container) {
+        if (args.length > 0) {
+          throw new ArgumentsError(ContainerScope.name, cls.name);
+        }
+
         return container.getInstance(cls);
       };
     }
 
     public static Resolution(): Scope {
-      return function ResolutionScope(cls, _, resolutionContainer) {
-        return resolutionContainer.getInstance(cls);
+      return function ResolutionScope(cls, args, _, resolutionContainer) {
+        return resolutionContainer.getInstance(cls, args);
       };
     }
 
