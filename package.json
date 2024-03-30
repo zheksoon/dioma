@@ -1,6 +1,6 @@
 {
   "name": "dioma",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
   "keywords": [
     "di",
@@ -17,7 +17,7 @@
     "tsyringe"
   ],
   "files": [
-    "src/dioma.ts",
+    "src",
     "dist",
     "README.md",
     "LICENSE",
