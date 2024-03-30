@@ -1060,10 +1060,10 @@ describe("Dioma", () => {
     });
 
     describe("Token injection", () => {
-      let container = new Container();
+      let container = new Container(null, "parent");
 
       beforeEach(() => {
-        container = new Container();
+        container = new Container(null, "parent");
       });
 
       it("should be able to inject token", () => {
@@ -1080,12 +1080,6 @@ describe("Dioma", () => {
         const instance = container.inject(token);
 
         expect(instance).toBeInstanceOf(TokenClass);
-      });
-
-      it("should throw error when token is not registered", () => {
-        const token = new Token();
-
-        expect(() => container.inject(token)).toThrowError();
       });
 
       it("should be able to inject token with arguments", () => {
@@ -1105,7 +1099,13 @@ describe("Dioma", () => {
         expect(instance.value).toBe("test");
       });
 
-      it("token class should be registered on base container", () => {
+      it("should throw error when token is not registered", () => {
+        const token = new Token();
+
+        expect(() => container.inject(token)).toThrowError();
+      });
+
+      it("should be able to inject token from base class", () => {
         const token = new Token();
 
         class TokenClass {
@@ -1114,15 +1114,102 @@ describe("Dioma", () => {
 
         container.register({ token, class: TokenClass });
 
-        const childContainer = container.childContainer();
+        const childContainer = container.childContainer("child");
 
         const instance = childContainer.inject(token);
 
-        expect(instance).toBeInstanceOf(TokenClass);
-
         const instance2 = container.inject(token);
 
+        expect(instance).toBeInstanceOf(TokenClass);
+
         expect(instance2).toBe(instance);
+
+        container.unregister(token);
+
+        const instance3 = childContainer.inject(TokenClass);
+
+        expect(instance3).toBeInstanceOf(TokenClass);
+
+        expect(instance3).not.toBe(instance);
+      });
+
+      it("should be able to inject registered class", () => {
+        class RegisterClass {
+          constructor() {}
+
+          static scope = Scopes.Container();
+        }
+
+        container.register({ class: RegisterClass });
+
+        const instance = container.inject(RegisterClass);
+
+        expect(instance).toBeInstanceOf(RegisterClass);
+      });
+
+      it("should be able to inject registered class on parent container", () => {
+        class RegisterClass {
+          constructor() {}
+
+          static scope = Scopes.Container();
+        }
+
+        container.register({ class: RegisterClass });
+
+        const childContainer = container.childContainer("child");
+
+        const instance = childContainer.inject(RegisterClass);
+
+        expect(instance).toBeInstanceOf(RegisterClass);
+
+        const instance2 = container.inject(RegisterClass);
+
+        expect(instance2).toBe(instance);
+
+        container.unregister(RegisterClass);
+
+        const instance3 = childContainer.inject(RegisterClass);
+
+        expect(instance3).toBeInstanceOf(RegisterClass);
+
+        expect(instance3).not.toBe(instance);
+      });
+
+      it.skip("should be able to inject token async", async () => {
+        const tokenA = new Token();
+        const tokenB = new Token();
+
+        class A {
+          constructor(public instanceB = inject(B)) {}
+
+          static scope = Scopes.Container();
+        }
+
+        class B {
+          declare instanceA: A;
+
+          constructor(promiseA = injectAsync(A)) {
+            promiseA.then((instance) => {
+              this.instanceA = instance;
+            });
+          }
+
+          static scope = Scopes.Container();
+        }
+
+        container.register({ token: tokenA, class: A });
+        container.register({ token: tokenB, class: B });
+
+        const instance = container.inject(tokenA);
+
+        expect(instance).toBeInstanceOf(A);
+
+        await delay();
+
+        expect(instance.instanceB).toBeInstanceOf(B);
+        expect(instance.instanceB.instanceA).toBeInstanceOf(A);
+
+        expect(instance.instanceB.instanceA).toBe(instance);
       });
     });
   });

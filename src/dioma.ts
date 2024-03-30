@@ -63,7 +63,7 @@ export class Container {
 
   private pendingPromiseMap = new Map<ScopedClass, Promise<InstanceType<ScopedClass>>>();
 
-  private tokenDescriptorMap = new WeakMap<
+  private tokenDescriptorMap = new Map<
     Token<any> | ScopedClass,
     TokenDescriptorWithContainer
   >();
@@ -84,6 +84,8 @@ export class Container {
       instance = container.instances.get(cls);
       container = container.parentContainer;
     }
+
+    // console.log("container", this.name);
 
     if (!instance) {
       instance = new cls(...args);
@@ -119,6 +121,8 @@ export class Container {
 
     const descriptor = this.getTokenDescriptor(clsOrToken);
 
+    // console.log("descriptor", descriptor);
+
     if (descriptor) {
       container = descriptor.container;
       cls = descriptor.class;
@@ -137,6 +141,8 @@ export class Container {
       }
 
       this.resolutionSet.add(clsOrToken);
+
+      // console.log("injectImpl container", container.name);
 
       return scope(cls, args, container, this.resolutionContainer);
     } finally {
@@ -192,11 +198,17 @@ export class Container {
   register = (tokenDescriptor: TokenDescriptor) => {
     const token = tokenDescriptor.token || tokenDescriptor.class;
 
-    this.tokenDescriptorMap.set(token, { ...tokenDescriptor, container: this });
+    const descriptorWithContainer = { ...tokenDescriptor, container: this };
+
+    this.tokenDescriptorMap.set(token, descriptorWithContainer);
+    // this.tokenDescriptorMap.set(tokenDescriptor.class, descriptorWithContainer);
   };
 
   unregister = (token: Token<any> | ScopedClass) => {
+    const cls = this.getTokenDescriptor(token)?.class;
+
     this.tokenDescriptorMap.delete(token);
+    this.instances.delete(cls);
   };
 
   reset = () => {
