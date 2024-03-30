@@ -217,6 +217,55 @@ pet.pet(); // Fluffy petted
 Only transient and resolution scopes support argument injection.
 Resolution scope instances are cached for the entire resolution, so the arguments are passed only once.
 
+## Class registration
+
+By default, `Scopes.Container` class injection is "sticky" - the class sticks to the container where it was first injected.
+
+If you want to make a class save its instance in some specific parent container (see [Child containers](#Child-containers)), you can use class registration:
+
+```typescript
+const container = new Container();
+
+const child = container.childContainer();
+
+class Earth {
+  static scope = Scopes.Container();
+}
+
+// Register the World class in the parent container
+container.register({ class: Earth });
+
+// Creates instance on the parent container
+const ourEarth = container.inject(Earth);
+
+// Returns the Earth instance from the parent container
+const theirEarth = child.inject(Earth);
+
+ourEarth === theirEarth; // true
+```
+
+## Injection tokens
+
+Instead of classes, you can use tokens to inject dependencies:
+
+```typescript
+import { Container, Token } from "dioma";
+
+const container = new Container();
+
+const token = new Token("Land token");
+
+class Land {
+  static scope = Scopes.Container();
+}
+
+container.register({ token, class: Land });
+
+container.inject(token) === container.inject(Land); // true
+```
+
+Tokens are useful when you need to inject a class that is registered later or has various implementations. Tokens also override parent registrations.
+
 ## Child containers
 
 You can create child containers to isolate the scope of the classes.
@@ -239,7 +288,7 @@ class Land {
 }
 
 // Register the Land class in the parent container
-container.inject(Land);
+container.register({ class: Land });
 
 class Garage {
   // Land resolves from the parent container

@@ -24,11 +24,7 @@
     "package.json"
   ],
   "scripts": {
-    "clear": "rm -rf dist",
-    "build:es6": "tsc --outDir dist/es6 --module es6 --target es6 --declaration --declarationDir dist",
-    "build:common": "tsc --outDir dist/common --module commonjs --target es6",
-    "build:umd": "tsc --outDir dist/umd --module umd --target es5",
-    "build": "npm run clear && npm run build:es6 && npm run build:common && npm run build:umd",
+    "build": "vite build --minify=false --sourcemap=true",
     "test": "vitest",
     "test:coverage": "vitest --coverage"
   },
