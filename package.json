@@ -33,17 +33,16 @@
     "test:coverage": "vitest --coverage"
   },
   "devDependencies": {
-    "@types/node": "^20.11.30",
     "@vitest/coverage-v8": "^1.4.0",
     "@vitest/ui": "latest",
-    "typescript": "^5.4.2",
     "vite": "latest",
-    "vitest": "latest"
+    "vitest": "latest",
+    "vite-plugin-dts": "^3.8.1"
   },
-  "types": "dist/dioma.d.ts",
-  "module": "dist/es6/dioma.js",
-  "main": "dist/common/dioma.js",
-  "umd:main": "dist/umd/dioma.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/dioma.mjs",
+  "main": "dist/dioma.js",
+  "umd:main": "dist/dioma.umd.js",
   "license": "MIT",
   "repository": {
     "type": "git",
