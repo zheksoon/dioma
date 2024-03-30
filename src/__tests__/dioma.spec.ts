@@ -7,6 +7,7 @@ import {
   AsyncCycleDependencyError,
   injectAsync,
   ArgumentsError,
+  Token,
 } from "../dioma";
 import { describe, it, expect, beforeEach } from "vitest";
 
@@ -330,7 +331,9 @@ describe("Dioma", () => {
         static scope = Scopes.Scoped();
       }
 
-      expect(() => container.inject(CircularDependencyA)).toThrowError(CycleDependencyError);
+      expect(() => container.inject(CircularDependencyA)).toThrowError(
+        CycleDependencyError
+      );
     });
 
     it("should throw error when circular dependency is detected for resolution scope", () => {
@@ -348,7 +351,9 @@ describe("Dioma", () => {
 
       const container = new Container();
 
-      expect(() => container.inject(CircularDependencyA)).toThrowError(CycleDependencyError);
+      expect(() => container.inject(CircularDependencyA)).toThrowError(
+        CycleDependencyError
+      );
     });
 
     it("should throw error when circular dependency is detected for singleton scope", () => {
@@ -550,10 +555,12 @@ describe("Dioma", () => {
           instanceBPromise = injectAsync(CircularDependencyB),
           instanceCPromise = injectAsync(CircularDependencyC)
         ) {
-          Promise.all([instanceBPromise, instanceCPromise]).then(([instanceB, instanceC]) => {
-            this.instanceB = instanceB;
-            this.instanceC = instanceC;
-          });
+          Promise.all([instanceBPromise, instanceCPromise]).then(
+            ([instanceB, instanceC]) => {
+              this.instanceB = instanceB;
+              this.instanceC = instanceC;
+            }
+          );
         }
 
         static scope = Scopes.Singleton();
@@ -567,10 +574,12 @@ describe("Dioma", () => {
           instanceCPromise = injectAsync(CircularDependencyC),
           instanceAPromise = injectAsync(CircularDependencyA)
         ) {
-          Promise.all([instanceCPromise, instanceAPromise]).then(([instanceC, instanceA]) => {
-            this.instanceC = instanceC;
-            this.instanceA = instanceA;
-          });
+          Promise.all([instanceCPromise, instanceAPromise]).then(
+            ([instanceC, instanceA]) => {
+              this.instanceC = instanceC;
+              this.instanceA = instanceA;
+            }
+          );
         }
 
         static scope = Scopes.Singleton();
@@ -584,10 +593,12 @@ describe("Dioma", () => {
           instanceAPromise = injectAsync(CircularDependencyA),
           instanceBPromise = injectAsync(CircularDependencyB)
         ) {
-          Promise.all([instanceAPromise, instanceBPromise]).then(([instanceA, instanceB]) => {
-            this.instanceA = instanceA;
-            this.instanceB = instanceB;
-          });
+          Promise.all([instanceAPromise, instanceBPromise]).then(
+            ([instanceA, instanceB]) => {
+              this.instanceA = instanceA;
+              this.instanceB = instanceB;
+            }
+          );
         }
 
         static scope = Scopes.Singleton();
@@ -773,7 +784,9 @@ describe("Dioma", () => {
       expect(instance.instanceB.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
 
       expect(instance.instanceB.instanceC.instanceA).not.toBe(instance);
-      expect(instance.instanceB.instanceC.instanceA.instanceB).not.toBe(instance.instanceB);
+      expect(instance.instanceB.instanceC.instanceA.instanceB).not.toBe(
+        instance.instanceB
+      );
       expect(instance.instanceB.instanceC.instanceA.instanceB.instanceC).not.toBe(
         instance.instanceB.instanceC
       );
@@ -835,7 +848,9 @@ describe("Dioma", () => {
       class CircularDependencyB {
         declare instanceA: CircularDependencyA;
 
-        constructor(public instanceAPromise = container.injectAsync(CircularDependencyA)) {
+        constructor(
+          public instanceAPromise = container.injectAsync(CircularDependencyA)
+        ) {
           instanceAPromise.then((instance) => {
             this.instanceA = instance;
           });
@@ -996,6 +1011,119 @@ describe("Dioma", () => {
 
       expect(instanceB.instanceA).toBeInstanceOf(ClassA);
       expect(instanceB.instanceA.value).toBe("world");
+    });
+  });
+
+  describe(".register", () => {
+    it("should be able to register class", () => {
+      class RegisterClass {
+        constructor() {}
+
+        static scope = Scopes.Transient();
+      }
+
+      globalContainer.register({ class: RegisterClass });
+
+      const instance = inject(RegisterClass);
+
+      expect(instance).toBeInstanceOf(RegisterClass);
+    });
+
+    it("should use registration scope if provided", () => {
+      class RegisterClass {
+        constructor() {}
+
+        static scope = Scopes.Transient();
+      }
+
+      globalContainer.register({ class: RegisterClass, scope: Scopes.Singleton() });
+
+      const instance = inject(RegisterClass);
+      const instance2 = inject(RegisterClass);
+
+      expect(instance).toBe(instance2);
+    });
+
+    it("should use class scope if registration scope is not provided", () => {
+      class RegisterClass {
+        constructor() {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      globalContainer.register({ class: RegisterClass });
+
+      const instance = inject(RegisterClass);
+      const instance2 = inject(RegisterClass);
+
+      expect(instance).toBe(instance2);
+    });
+
+    describe("Token injection", () => {
+      let container = new Container();
+
+      beforeEach(() => {
+        container = new Container();
+      });
+
+      it("should be able to inject token", () => {
+        const token = new Token();
+
+        class TokenClass {
+          constructor() {}
+
+          static scope = Scopes.Transient();
+        }
+
+        container.register({ token, class: TokenClass });
+
+        const instance = container.inject(token);
+
+        expect(instance).toBeInstanceOf(TokenClass);
+      });
+
+      it("should throw error when token is not registered", () => {
+        const token = new Token();
+
+        expect(() => container.inject(token)).toThrowError();
+      });
+
+      it("should be able to inject token with arguments", () => {
+        const token = new Token();
+
+        class TokenClass {
+          constructor(public value: string) {}
+
+          static scope = Scopes.Transient();
+        }
+
+        container.register({ token, class: TokenClass });
+
+        const instance = container.inject(token, "test");
+
+        expect(instance).toBeInstanceOf(TokenClass);
+        expect(instance.value).toBe("test");
+      });
+
+      it("token class should be registered on base container", () => {
+        const token = new Token();
+
+        class TokenClass {
+          static scope = Scopes.Container();
+        }
+
+        container.register({ token, class: TokenClass });
+
+        const childContainer = container.childContainer();
+
+        const instance = childContainer.inject(token);
+
+        expect(instance).toBeInstanceOf(TokenClass);
+
+        const instance2 = container.inject(token);
+
+        expect(instance2).toBe(instance);
+      });
     });
   });
 });

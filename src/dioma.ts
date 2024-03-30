@@ -13,7 +13,20 @@ interface ScopedClass {
   scope: Scope;
 }
 
-export type Injectable<C extends I, I extends ScopedClass = ScopedClass> = InstanceType<I>;
+export type Injectable<
+  C extends I,
+  I extends ScopedClass = ScopedClass
+> = InstanceType<I>;
+
+export type TokenDescriptor = {
+  token?: Token<any>;
+  class: ScopedClass;
+  scope?: Scope;
+};
+
+type TokenDescriptorWithContainer = TokenDescriptor & {
+  container: Container;
+};
 
 export class CycleDependencyError extends Error {
   constructor() {
@@ -33,6 +46,12 @@ export class ArgumentsError extends Error {
   }
 }
 
+export class TokenNotRegisteredError extends Error {
+  constructor() {
+    super("Token is not registered in the container");
+  }
+}
+
 const MAX_LOOP_COUNT = 100;
 
 export class Container {
@@ -40,9 +59,14 @@ export class Container {
 
   private resolutionContainer: Container | null = null;
 
-  private resolutionSet = new Set<ScopedClass>();
+  private resolutionSet = new Set<ScopedClass | Token<ScopedClass>>();
 
   private pendingPromiseMap = new Map<ScopedClass, Promise<InstanceType<ScopedClass>>>();
+
+  private tokenDescriptorMap = new WeakMap<
+    Token<any> | ScopedClass,
+    TokenDescriptorWithContainer
+  >();
 
   constructor(private parentContainer: Container | null = null, public name?: string) {}
 
@@ -52,7 +76,7 @@ export class Container {
     return new Container(this, name);
   };
 
-  private getInstance<T>(cls: new () => T, args: any[] = []) {
+  private getInstance<T>(cls: any, args: any[] = []) {
     let instance: T | null = null;
     let container: Container | null = this;
 
@@ -62,7 +86,6 @@ export class Container {
     }
 
     if (!instance) {
-      // @ts-expect-error
       instance = new cls(...args);
 
       this.instances.set(cls, instance);
@@ -71,25 +94,53 @@ export class Container {
     return instance;
   }
 
+  private getTokenDescriptor(
+    clsOrToken: ScopedClass | Token<any>
+  ): TokenDescriptorWithContainer | undefined {
+    let tokenDescriptor = this.tokenDescriptorMap.get(clsOrToken);
+
+    if (!tokenDescriptor && this.parentContainer) {
+      tokenDescriptor = this.parentContainer.getTokenDescriptor(clsOrToken);
+    }
+
+    return tokenDescriptor;
+  }
+
   injectImpl<T extends ScopedClass, Args extends any[]>(
-    cls: T,
+    clsOrToken: T | Token<T>,
     args: Args,
     resolutionContainer = this.resolutionContainer
   ): InstanceType<T> {
-    this.resolutionContainer = resolutionContainer || this.childContainer("ResolutionContainer");
+    this.resolutionContainer = resolutionContainer || new Container();
 
-    const scope = cls.scope || Scopes.Transient();
+    let cls = clsOrToken as ScopedClass;
+    let scope: Scope;
+    let container: Container | null = this;
+
+    const descriptor = this.getTokenDescriptor(clsOrToken);
+
+    if (descriptor) {
+      container = descriptor.container;
+      cls = descriptor.class;
+      scope = descriptor.scope || cls.scope || Scopes.Transient();
+    } else {
+      if (clsOrToken instanceof Token) {
+        throw new TokenNotRegisteredError();
+      }
+
+      scope = cls.scope || Scopes.Transient();
+    }
 
     try {
-      if (this.resolutionSet.has(cls)) {
+      if (this.resolutionSet.has(clsOrToken)) {
         throw new CycleDependencyError();
       }
 
-      this.resolutionSet.add(cls);
+      this.resolutionSet.add(clsOrToken);
 
-      return scope(cls, args, this, this.resolutionContainer);
+      return scope(cls, args, container, this.resolutionContainer);
     } finally {
-      this.resolutionSet.delete(cls);
+      this.resolutionSet.delete(clsOrToken);
       this.resolutionContainer = resolutionContainer;
 
       if (!resolutionContainer) {
@@ -98,7 +149,10 @@ export class Container {
     }
   }
 
-  inject = <T extends ScopedClass, Args extends any[]>(cls: T, ...args: Args) => {
+  inject = <T extends ScopedClass, Args extends any[]>(
+    cls: T | Token<T>,
+    ...args: Args
+  ) => {
     return this.injectImpl(cls, args, undefined);
   };
 
@@ -135,6 +189,16 @@ export class Container {
     return promise;
   };
 
+  register = (tokenDescriptor: TokenDescriptor) => {
+    const token = tokenDescriptor.token || tokenDescriptor.class;
+
+    this.tokenDescriptorMap.set(token, { ...tokenDescriptor, container: this });
+  };
+
+  unregister = (token: Token<any> | ScopedClass) => {
+    this.tokenDescriptorMap.delete(token);
+  };
+
   reset = () => {
     this.instances = new WeakMap();
     this.resolutionSet = new Set();
@@ -142,6 +206,7 @@ export class Container {
     this.resolutionContainer = null;
   };
 
+  // Nesting scopes to access private .getInstance method
   static Scopes = class Scopes {
     public static Singleton(): Scope {
       return function SingletonScope(cls, args) {
@@ -178,6 +243,8 @@ export class Container {
     public static Scoped = Scopes.Container;
   };
 }
+
+export class Token<T extends new (...args: any[]) => any> {}
 
 export const globalContainer = new Container();
 

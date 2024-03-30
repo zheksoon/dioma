@@ -17,7 +17,7 @@
     "tsyringe"
   ],
   "files": [
-    "src",
+    "src/dioma.ts",
     "dist",
     "README.md",
     "LICENSE",
