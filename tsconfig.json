@@ -6,6 +6,6 @@
     "moduleResolution": "node",
     "sourceMap": true
   },
-  "include": ["src/dioma.ts"],
+  "include": ["src/container.ts"],
   "exclude": ["node_modules", "dist", "src/**/*.spec.ts"]
 }

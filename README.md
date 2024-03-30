@@ -220,9 +220,9 @@ Resolution scope instances are cached for the entire resolution, so the argument
 ## Child containers
 
 You can create child containers to isolate the scope of the classes.
-Child containers have a hierarchical structure, so Dioma searches in parent containers first. If no instance found, it creates it on the child itself.
+Child containers have a hierarchical structure, so Dioma searches in parent containers first. If no instance is found, it creates it on the child itself.
 
-Here's an example of child containers usage:
+Here's an example of child container usage:
 
 <details>
 <summary><b>Here is an example</b></summary>
