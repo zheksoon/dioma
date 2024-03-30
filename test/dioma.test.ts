@@ -8,6 +8,7 @@ import {
   injectAsync,
   ArgumentsError,
   Token,
+  ScopedClass,
 } from "../src";
 import { describe, it, expect, beforeEach } from "vitest";
 
@@ -138,9 +139,9 @@ describe("Dioma", () => {
     it("uses transient scope by default", () => {
       class DefaultClass {}
 
-      const instance1 = inject(DefaultClass);
+      const instance1 = inject(DefaultClass as ScopedClass);
 
-      const instance2 = inject(DefaultClass);
+      const instance2 = inject(DefaultClass as ScopedClass);
 
       expect(instance1).toBeInstanceOf(DefaultClass);
 
@@ -1063,13 +1064,13 @@ describe("Dioma", () => {
       });
 
       it("should be able to inject token", () => {
-        const token = new Token();
-
         class TokenClass {
           constructor() {}
 
           static scope = Scopes.Transient();
         }
+
+        const token = new Token<TokenClass>();
 
         container.register({ token, class: TokenClass });
 
@@ -1079,13 +1080,13 @@ describe("Dioma", () => {
       });
 
       it("should be able to inject token with arguments", () => {
-        const token = new Token();
-
         class TokenClass {
           constructor(public value: string) {}
 
           static scope = Scopes.Transient();
         }
+
+        const token = new Token<TokenClass>();
 
         container.register({ token, class: TokenClass });
 
@@ -1172,9 +1173,6 @@ describe("Dioma", () => {
       });
 
       it("should be able to inject token in async loop", async () => {
-        const tokenA = new Token();
-        const tokenB = new Token();
-
         class A {
           constructor(public instanceB = container.inject(B)) {}
 
@@ -1192,6 +1190,9 @@ describe("Dioma", () => {
 
           static scope = Scopes.Container();
         }
+
+        const tokenA = new Token<A>();
+        const tokenB = new Token<B>();
 
         container.register({ token: tokenA, class: A });
         container.register({ token: tokenB, class: B });
@@ -1218,9 +1219,6 @@ describe("Dioma", () => {
       });
 
       it("should be able to injectAsync token in async loop", async () => {
-        const tokenA = new Token();
-        const tokenB = new Token();
-
         class A {
           constructor(public instanceB = container.inject(B)) {}
 
@@ -1238,6 +1236,9 @@ describe("Dioma", () => {
 
           static scope = Scopes.Container();
         }
+
+        const tokenA = new Token<A>();
+        const tokenB = new Token<B>();
 
         container.register({ token: tokenA, class: A });
         container.register({ token: tokenB, class: B });
@@ -1264,9 +1265,6 @@ describe("Dioma", () => {
       });
 
       it("should be able to inject token in async loop", async () => {
-        const tokenA = new Token();
-        const tokenB = new Token();
-
         class A {
           constructor(public instanceB = container.inject(tokenB)) {}
 
@@ -1285,6 +1283,9 @@ describe("Dioma", () => {
           static scope = Scopes.Container();
         }
 
+        const tokenA = new Token<A>();
+        const tokenB = new Token<B>();
+
         container.register({ token: tokenA, class: A });
         container.register({ token: tokenB, class: B });
 
@@ -1300,13 +1301,13 @@ describe("Dioma", () => {
       });
 
       it("should get the same instance of inject token and class", () => {
-        const token = new Token();
-
         class TokenClass {
           constructor() {}
 
           static scope = Scopes.Container();
         }
+
+        const token = new Token<TokenClass>();
 
         container.register({ token, class: TokenClass });
 
@@ -1317,13 +1318,13 @@ describe("Dioma", () => {
       });
 
       it("should unregister token", () => {
-        const token = new Token();
-
         class TokenClass {
           constructor() {}
 
           static scope = Scopes.Container();
         }
+
+        const token = new Token<TokenClass>();
 
         container.register({ token, class: TokenClass });
 
@@ -1337,13 +1338,13 @@ describe("Dioma", () => {
       });
 
       it("should unregister token from parent container", () => {
-        const token = new Token();
-
         class TokenClass {
           constructor() {}
 
           static scope = Scopes.Container();
         }
+
+        const token = new Token<TokenClass>();
 
         container.register({ token, class: TokenClass });
 

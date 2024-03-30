@@ -30,7 +30,8 @@ yarn add dioma
 
 ## Usage
 
-To start injecting dependencies, you just need to add the `static scope` property to your class and use the `inject` function to get the instance of a class.
+To start injecting dependencies, you just need to add the `static scope` property to your class and use the `inject` function to get the instance of a class. By default, `inject` makes classes "stick" to the container where they were first injected (more details in the [Class registration](#Class-registration) section).
+
 Here's an example of using it for [Singleton](#singleton-scope) and [Transient](#transient-scope) scopes:
 
 ```typescript
@@ -60,7 +61,7 @@ class Car {
 // Creates a new Car and injects Garage
 const car = inject(Car);
 
-сar.park();
+car.park();
 ```
 
 ## Scopes
@@ -138,7 +139,7 @@ class Garage {
 }
 
 // Register Garage on the container
-container.inject(Garage);
+container.register({ class: Garage });
 
 class Car {
   // Use inject method of the container for Garage
@@ -153,7 +154,9 @@ class Car {
   static scope = Scopes.Transient();
 }
 
-const car = inject(Car);
+const car = container.inject(Car);
+
+car.park();
 ```
 
 ### Resolution scope
@@ -170,7 +173,7 @@ class Query {
 class RequestHandler {
   constructor(public query = inject(Query)) {}
 
-  static scope = Scopes.Resoltion();
+  static scope = Scopes.Resolution();
 }
 
 class RequestUser {
@@ -197,13 +200,17 @@ import { inject, Scopes } from "dioma";
 
 class Owner {
   static scope = Scopes.Singleton();
+
+  petSomebody(pet: Pet) {
+    console.log(`${pet.name} petted`);
+  }
 }
 
 class Pet {
   constructor(public name: string, public owner = inject(Owner)) {}
 
   pet() {
-    console.log(`${this.name} petted`);
+    this.owner.petSomebody(this);
   }
 
   static scope = Scopes.Transient();
@@ -249,19 +256,25 @@ ourEarth === theirEarth; // true
 Instead of classes, you can use tokens to inject dependencies:
 
 ```typescript
-import { Container, Token } from "dioma";
+import { Container, Token, Scopes } from "dioma";
 
 const container = new Container();
-
-const token = new Token("Land token");
 
 class Land {
   static scope = Scopes.Container();
 }
 
+const token = new Token<Land>("Land token");
+
 container.register({ token, class: Land });
 
-container.inject(token) === container.inject(Land); // true
+// Land type is inferred from the token
+const landFromToken = container.inject(token);
+
+// Land type is inferred from the class
+const landFromClass = container.inject(Land);
+
+landFromToken === landFromClass; // true
 ```
 
 Tokens are useful when you need to inject a class that is registered later or has various implementations. Tokens also override parent registrations.
@@ -284,6 +297,10 @@ const container = new Container();
 const child = container.childContainer();
 
 class Land {
+  buildGarage() {
+    console.log("Garage built");
+  }
+
   static scope = Scopes.Container();
 }
 
@@ -295,14 +312,15 @@ class Garage {
   constructor(private land = child.inject(Land)) {}
 
   open() {
+    this.land.buildGarage();
     console.log("Garage opened");
   }
 
   static scope = Scopes.Container();
 }
 
-// Now Garage instance is stuck to the child container
-child.inject(Garage);
+// Register the Garage class in the child container
+child.register({ class: Garage });
 
 class Car {
   constructor(private garage = child.inject(Garage)) {}
@@ -326,14 +344,22 @@ car.park();
 
 When you have a circular dependency, there will be an error `Circular dependency detected`. To solve this problem, you can use async injection.
 
+<details>
+
+<summary><b>Here is an example:</b></summary>
+
 ```typescript
 import { inject, injectAsync, Scopes } from "dioma";
 
 class A {
-  constructor(private b = inject(B)) {}
+  private declare b: B;
+
+  constructor() {
+    this.b = inject(B);
+  }
 
   doWork() {
-    console.log("doing work");
+    console.log("doing work A");
     this.b.help();
   }
 
@@ -341,6 +367,8 @@ class A {
 }
 
 class B {
+  private declare a: A;
+
   // injectAsync returns a promise of the A instance
   constructor(aPromise = injectAsync(A)) {
     aPromise.then((instance) => {
@@ -352,16 +380,25 @@ class B {
     console.log("helping with work");
   }
 
+  doAnotherWork() {
+    console.log("doing work B");
+    this.a.doWork();
+  }
+
   static scope = Scopes.Singleton();
 }
 
 const a = inject(A);
+const b = inject(B);
 
 // All cycles are resolved on the next tick
 await new Promise((resolve) => setTimeout(resolve, 0));
 
-await a.init();
+a.doWork();
+b.doAnotherWork();
 ```
+
+</details>
 
 Please note that async injection has an undefined behavior when used with `Scopes.Transient()`. It may return an instance with an unexpected loop, or throw the `Circular dependency detected in async resolution` error.
 

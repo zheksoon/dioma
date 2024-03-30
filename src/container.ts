@@ -1,4 +1,11 @@
-import type { ScopedClass, TokenDescriptor, ScopeHandler, IContainer } from "./types";
+import type {
+  ScopedClass,
+  TokenDescriptor,
+  ScopeHandler,
+  IContainer,
+  TokenOrClass,
+  TokenOrClassInstance,
+} from "./types";
 import { Scopes } from "./scopes";
 import { Token } from "./token";
 import {
@@ -6,8 +13,6 @@ import {
   CycleDependencyError,
   TokenNotRegisteredError,
 } from "./errors";
-
-type TokenOrClass = Token<any> | ScopedClass;
 
 type TokenDescriptorWithContainer = TokenDescriptor & {
   container: Container;
@@ -64,11 +69,11 @@ export class Container implements IContainer {
     return tokenDescriptor;
   }
 
-  injectImpl<T extends ScopedClass, Args extends any[]>(
-    clsOrToken: T | Token<T>,
+  injectImpl<T extends TokenOrClass, Args extends any[]>(
+    clsOrToken: T,
     args: Args,
     resolutionContainer = this.resolutionContainer
-  ): InstanceType<T> {
+  ): TokenOrClassInstance<T> {
     this.resolutionContainer = resolutionContainer || new Container();
 
     let cls = clsOrToken as ScopedClass;
@@ -107,17 +112,17 @@ export class Container implements IContainer {
     }
   }
 
-  inject = <T extends ScopedClass, Args extends any[]>(
-    cls: T | Token<T>,
+  inject = <T extends TokenOrClass, Args extends any[]>(
+    cls: T,
     ...args: Args
-  ) => {
+  ): TokenOrClassInstance<T> => {
     return this.injectImpl(cls, args, undefined);
   };
 
-  injectAsync = <T extends ScopedClass, Args extends any[]>(
-    cls: T | Token<T>,
+  injectAsync = <T extends TokenOrClass, Args extends any[]>(
+    cls: T,
     ...args: Args
-  ): Promise<InstanceType<T>> => {
+  ): Promise<TokenOrClassInstance<T>> => {
     const resolutionContainer = this.resolutionContainer;
 
     this.loopCounter += 1;
@@ -127,7 +132,7 @@ export class Container implements IContainer {
     }
 
     if (this.pendingPromiseMap.has(cls)) {
-      return this.pendingPromiseMap.get(cls) as Promise<InstanceType<T>>;
+      return this.pendingPromiseMap.get(cls) as Promise<TokenOrClassInstance<T>>;
     }
 
     if (this.instances.has(cls)) {
@@ -147,16 +152,15 @@ export class Container implements IContainer {
     return promise;
   };
 
-  register = (tokenDescriptor: TokenDescriptor) => {
+  register = (tokenDescriptor: TokenDescriptor): void => {
     const token = tokenDescriptor.token || tokenDescriptor.class;
 
     const descriptorWithContainer = { ...tokenDescriptor, container: this };
 
     this.tokenDescriptorMap.set(token, descriptorWithContainer);
-    // this.tokenDescriptorMap.set(tokenDescriptor.class, descriptorWithContainer);
   };
 
-  unregister = (token: Token<any> | ScopedClass) => {
+  unregister = (token: TokenOrClass) => {
     const descriptor = this.getTokenDescriptor(token);
 
     this.tokenDescriptorMap.delete(token);
@@ -166,11 +170,13 @@ export class Container implements IContainer {
     }
   };
 
-  reset = () => {
+  reset = (): void => {
     this.instances = new WeakMap();
-    this.resolutionSet = new Set();
-    this.pendingPromiseMap = new Map();
+    this.resolutionSet.clear();
+    this.pendingPromiseMap.clear();
+    this.tokenDescriptorMap.clear();
     this.resolutionContainer = null;
+    this.loopCounter = 0;
   };
 }
 

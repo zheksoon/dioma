@@ -25,16 +25,24 @@ export type TokenDescriptor = {
   scope?: ScopeHandler;
 };
 
-export interface IContainer {
-  inject<T extends ScopedClass, Args extends any[]>(
-    cls: T | Token<T>,
-    ...args: Args
-  ): InstanceType<T>;
+export type TokenOrClass = Token<any> | ScopedClass;
 
-  injectAsync<T extends ScopedClass, Args extends any[]>(
-    cls: T | Token<T>,
+export type TokenOrClassInstance<T extends TokenOrClass> = T extends Token<infer U>
+  ? U
+  : T extends ScopedClass
+  ? InstanceType<T>
+  : any;
+
+export interface IContainer {
+  inject<T extends TokenOrClass, Args extends any[]>(
+    cls: T,
     ...args: Args
-  ): Promise<InstanceType<T>>;
+  ): TokenOrClassInstance<T>;
+
+  injectAsync<T extends TokenOrClass, Args extends any[]>(
+    cls: T,
+    ...args: Args
+  ): Promise<TokenOrClassInstance<T>>;
 
   childContainer(name?: string): Container;
 
