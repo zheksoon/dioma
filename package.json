@@ -1,7 +1,12 @@
 {
   "name": "dioma",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:zheksoon/dioma.git"
+  },
   "keywords": [
     "di",
     "dependency injection",
@@ -16,6 +21,16 @@
     "awilix",
     "tsyringe"
   ],
+  "type": "module",
+  "main": "dist/dioma.cjs",
+  "module": "dist/dioma.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/dioma.js",
+      "require": "./dist/dioma.cjs"
+    }
+  },
   "files": [
     "src",
     "dist",
@@ -30,18 +45,8 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^1.4.0",
-    "@vitest/ui": "latest",
-    "vite": "latest",
-    "vitest": "latest",
+    "vite": "^5.2.7",
+    "vitest": "^1.4.0",
     "vite-plugin-dts": "^3.8.1"
-  },
-  "types": "dist/index.d.ts",
-  "module": "dist/dioma.mjs",
-  "main": "dist/dioma.js",
-  "umd:main": "dist/dioma.umd.js",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git@github.com:zheksoon/dioma.git"
   }
 }
