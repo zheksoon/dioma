@@ -28,7 +28,8 @@
   "exports": {
     ".": {
       "import": "./dist/dioma.js",
-      "require": "./dist/dioma.cjs"
+      "require": "./dist/dioma.cjs",
+      "types": "./dist/index.d.ts"
     }
   },
   "files": [
