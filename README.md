@@ -15,22 +15,23 @@
 ## Features
 
 - <b>Just do it</b> - no decorators, no annotations, no magic
-- <b>No</b> dependencies
+- <b>Tokens</b> for class, value, and factory injection
 - <b>Async</b> injection and dependency cycle detection
 - <b>TypeScript</b> support
+- <b>No</b> dependencies
 - <b>Tiny</b> size
 
 ## Installation
 
 ```sh
-npm install dioma
+npm install --save dioma
 
 yarn add dioma
 ```
 
 ## Usage
 
-To start injecting dependencies, you just need to add the `static scope` property to your class and use the `inject` function to get the instance of a class. By default, `inject` makes classes "stick" to the container where they were first injected (more details in the [Class registration](#Class-registration) section).
+To start injecting dependencies, you just need to add the `static scope` property to your class and use the `inject` function to get the instance of it. By default, `inject` makes classes "stick" to the container where they were first injected (more details in the [Class registration](#Class-registration) section).
 
 Here's an example of using it for [Singleton](#singleton-scope) and [Transient](#transient-scope) scopes:
 
@@ -47,6 +48,7 @@ class Garage {
 }
 
 class Car {
+  // injects instance of Garage
   constructor(private garage = inject(Garage)) {}
 
   park() {
@@ -116,7 +118,7 @@ const vehicle = inject(Vehicle);
 vehicle.drive();
 ```
 
-Transient scope instances can't be cross-referenced by the [async injection](#Async-injection-and-injection-cycles) as it's an infinite recursion.
+Generally, transient scope instances can't be cross-referenced by the [async injection](#Async-injection-and-injection-cycles) with some exceptions.
 
 ### Container scope
 
@@ -159,6 +161,8 @@ const car = container.inject(Car);
 car.park();
 ```
 
+Container scoped classes usually are [registered in the container](#class-registration) first. Without it, the class will "stick" to the container it's used in.
+
 ### Resolution scope
 
 Resolution scope creates a new instance of the class every time, but the instance is the same for the entire resolution:
@@ -190,6 +194,8 @@ const requestUser = inject(RequestUser);
 // The same instance of Query is used for each of them
 requestUser.query === requestUser.request.query;
 ```
+
+Resolution scope instances can be cross-referenced by the [async injection](#async-injection-and-circular-dependencies) without any issues.
 
 ## Injection with arguments
 
@@ -235,110 +241,187 @@ const container = new Container();
 
 const child = container.childContainer();
 
-class Earth {
+class FooBar {
   static scope = Scopes.Container();
 }
 
-// Register the World class in the parent container
-container.register({ class: Earth });
+// Register the Foo class in the parent container
+container.register({ class: FooBar });
 
-// Creates instance on the parent container
-const ourEarth = container.inject(Earth);
+// Returns and cache the instance on parent container
+const foo = container.inject(FooBar);
 
-// Returns the Earth instance from the parent container
-const theirEarth = child.inject(Earth);
+// Returns the FooBar instance from the parent container
+const bar = child.inject(FooBar);
 
-ourEarth === theirEarth; // true
+foo === bar; // true
 ```
 
-## Injection tokens
-
-Instead of classes, you can use tokens to inject dependencies:
+You can override the scope of the registered class:
 
 ```typescript
-import { Container, Token, Scopes } from "dioma";
+container.register({ class: FooBar, scope: Scopes.Transient() });
+```
+
+To unregister a class, use the `unregister` method:
+
+```typescript
+container.unregister(FooBar);
+```
+
+After the unregistration, the class will be removed from the container and all its child containers, and the next injection will return a new instance.
+
+## Injection with tokens
+
+Instead of passing a class the `inject`, you can use tokens instead.
+Tokens can be used for class, value, and factory injection.
+Here's detailed information about each type.
+
+### Class tokens
+
+Class tokens are useful to inject an abstract class or interface that has multiple implementations:
+
+<details>
+
+<summary><b>Here is an example of injecting an abstract interface</b></summary>
+
+```typescript
+import { Token, Scopes, globalContainer } from "dioma";
+
+const wild = globalContainer.childContainer("Wild");
+
+const zoo = wild.childContainer("Zoo");
+
+interface IAnimal {
+  speak(): void;
+}
+
+class Dog implements IAnimal {
+  speak() {
+    console.log("Woof");
+  }
+
+  static scope = Scopes.Container();
+}
+
+class Cat implements IAnimal {
+  speak() {
+    console.log("Meow");
+  }
+
+  static scope = Scopes.Container();
+}
+
+const animalToken = new Token<IAnimal>("Animal");
+
+// Register Dog class with the token
+wild.register({ token: animalToken, class: Dog });
+
+// Register Cat class with the token
+zoo.register({ token: animalToken, class: Cat });
+
+// Returns Dog instance
+const wildAnimal = wild.inject(animalToken);
+
+// Returns Cat instance
+const zooAnimal = zoo.inject(animalToken);
+```
+
+</detals>
+
+The class token registration can also override the scope of the class:
+
+```typescript
+wild.register({ token: animalToken, class: Dog, scope: Scopes.Transient() });
+```
+
+### Value tokens
+
+Value tokens are useful to inject a constant value:
+
+```typescript
+import { Token } from "dioma";
 
 const container = new Container();
 
-class Land {
-  static scope = Scopes.Container();
-}
+const token = new Token<string>("Value token");
 
-const token = new Token<Land>("Land token");
+container.register({ token, value: "Value" });
 
-container.register({ token, class: Land });
+const value = container.inject(token);
 
-// Land type is inferred from the token
-const landFromToken = container.inject(token);
-
-// Land type is inferred from the class
-const landFromClass = container.inject(Land);
-
-landFromToken === landFromClass; // true
+console.log(value); // Value
 ```
 
-Tokens are useful when you need to inject a class that is registered later or has various implementations. Tokens also override parent registrations.
+### Factory tokens
+
+Factory tokens are useful to inject a factory function.
+The factory takes the current container as the first argument and returns a value:
+
+```typescript
+import { Token } from "dioma";
+
+const container = new Container();
+
+const token = new Token<string>("Factory token");
+
+container.register({ token, factory: (container) => "Value" });
+
+const value = container.inject(token);
+
+console.log(value); // Value
+```
+
+Factory function can also take additional arguments:
+
+```typescript
+const token = new Token<string>("Factory token");
+
+container.register({
+  token,
+  factory: (container, a: string, b): string => a + b,
+});
+
+const value = container.inject(token, "Hello, ", "world!");
+
+console.log(value); // Hello, world!
+```
+
+As a usual function, a factory can contain any additional logic, conditions, or dependencies.
 
 ## Child containers
 
 You can create child containers to isolate the scope of the classes.
-Child containers have a hierarchical structure, so Dioma searches in parent containers first. If no instance is found, it creates it on the child itself.
+Child containers have a hierarchical structure, so Dioma searches instances top-down from the current container to the root container.
+If the instance is not found, Dioma will create a new instance in the current container, or in the container where the class was registered.
 
-Here's an example of child container usage:
-
-<details>
-<summary><b>Here is an example</b></summary>
+Here's an example:
 
 ```typescript
 import { Container, Scopes } from "dioma";
 
-const container = new Container();
+const container = new Container(null, "Parent");
 
-const child = container.childContainer();
+const child = container.childContainer("Child");
 
-class Land {
-  buildGarage() {
-    console.log("Garage built");
-  }
-
+class ParentClass {
   static scope = Scopes.Container();
 }
 
-// Register the Land class in the parent container
-container.register({ class: Land });
-
-class Garage {
-  // Land resolves from the parent container
-  constructor(private land = child.inject(Land)) {}
-
-  open() {
-    this.land.buildGarage();
-    console.log("Garage opened");
-  }
-
+class ChildClass {
   static scope = Scopes.Container();
 }
 
-// Register the Garage class in the child container
-child.register({ class: Garage });
+container.register({ class: ParentClass });
 
-class Car {
-  constructor(private garage = child.inject(Garage)) {}
+child.register({ class: ChildClass });
 
-  park() {
-    this.garage.open();
-    console.log("Car parked");
-  }
+// Returns ParentClass instance from the parent container
+const parentInstance = child.inject(ParentClass);
 
-  static scope = Scopes.Transient();
-}
-
-const car = child.inject(Car);
-
-car.park();
+// Returns ChildClass instance from the child container
+const childInstance = child.inject(ChildClass);
 ```
-
-</details>
 
 ## Async injection and circular dependencies
 
@@ -352,27 +435,23 @@ When you have a circular dependency, there will be an error `Circular dependency
 import { inject, injectAsync, Scopes } from "dioma";
 
 class A {
-  private declare b: B;
-
-  constructor() {
-    this.b = inject(B);
-  }
+  constructor(private instanceB = inject(B)) {}
 
   doWork() {
     console.log("doing work A");
-    this.b.help();
+    this.instanceB.help();
   }
 
   static scope = Scopes.Singleton();
 }
 
 class B {
-  private declare a: A;
+  private declare instanceA: A;
 
   // injectAsync returns a promise of the A instance
-  constructor(aPromise = injectAsync(A)) {
-    aPromise.then((instance) => {
-      this.a = instance;
+  constructor(private promiseA = injectAsync(A)) {
+    this.promiseA.then((instance) => {
+      this.instanceA = instance;
     });
   }
 
@@ -382,14 +461,14 @@ class B {
 
   doAnotherWork() {
     console.log("doing work B");
-    this.a.doWork();
+    this.instanceA.doWork();
   }
 
   static scope = Scopes.Singleton();
 }
 
-const a = inject(A);
-const b = inject(B);
+const a = await injectAsync(A);
+const b = await injectAsync(B);
 
 // All cycles are resolved on the next tick
 await new Promise((resolve) => setTimeout(resolve, 0));
@@ -400,11 +479,30 @@ b.doAnotherWork();
 
 </details>
 
-Please note that async injection has an undefined behavior when used with `Scopes.Transient()`. It may return an instance with an unexpected loop, or throw the `Circular dependency detected in async resolution` error.
+Async injection has an undefined behavior when there is a loop with transient dependencies. It may return an instance with an unexpected loop, or throw the `Circular dependency detected in async resolution` error, so it's better to avoid such cases.
 
-As defined in the code above, you need to wait for the next tick to get all instance promises resolved.
+As defined in the code above, you need to **wait for the next tick** to get all instance promises resolved, even if you use `await injectAsync(...)`.
 
-In this example, doing `const b = await injectAsync(B)` will only return an instance with promise, not actual A, so it gets resolved only on the next tick.
+Generally, if you expect your dependency to have an async resolution, it's better to inject it with `injectAsync`, as in the example above. But, you can also use `inject` for async injection as long as you wait for the next tick after it.
+
+Tokens also can be used for async injection as well:
+
+```typescript
+import { Token, Scopes } from "dioma";
+
+const token = new Token<A>("A");
+
+class B {
+  private declare instanceA: A;
+
+  // token in used for async injection
+  constructor(private promiseA = injectAsync(token)) {
+    this.promiseA.then((instance) => {
+      this.instanceA = instance;
+    });
+  }
+}
+```
 
 ## TypeScript
 
@@ -431,6 +529,58 @@ class Repository implements Injectable<typeof Repository> {
 
 inject(Repository); // Also type error, scope is not specified
 ```
+
+Also, token and class injection infers the output types from the input types.
+If available, arguments are also checked and inferred.
+
+## API Reference
+
+### `new Container(parent?, name?)`
+
+Creates a new container with the specified parent container and name.
+
+### `new Token<T>(name?)`
+
+Creates a new token with the specified type and name.
+
+### `container.inject(classOrToken, ...args)`
+
+Injects the instance of the class or token, and provides arguments to the constructor or factory function.
+
+### `container.injectAsync(classOrToken, ...args)`
+
+Injects the promise of the instance of the class or token, and provides arguments to the constructor or factory function.
+
+### `container.register({ class, token?, scope? })`
+
+### `container.register({ token, value })`
+
+### `container.register({ token, factory })`
+
+Registers the class, value, or factory with the token in the container.
+
+### `container.unregister(classOrToken)`
+
+Unregisters the class or token from the container.
+
+### `container.childContainer(name?)`
+
+Creates a new child container with the specified name.
+
+### Global exports
+
+Global container:
+
+- `globalContainer` - the global container that is used by default for the `inject` function.
+- `inject` - the function to inject the instance of the class or token.
+- `injectAsync` - the function to inject the promise of the instance of the class or token.
+
+Errors:
+
+- `DependencyCycleError` - thrown when a circular dependency is detected.
+- `AsyncDependencyCycleError` - thrown when a circular dependency is detected in async resolution.
+- `ArgumentsError` - thrown when the arguments are passed to unsupported scopes.
+- `TokenNotRegisteredError` - thrown when the token is not registered in the container.
 
 ## Author
 

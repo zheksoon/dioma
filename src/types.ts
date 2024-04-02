@@ -19,36 +19,39 @@ export type Injectable<
   I extends ScopedClass = ScopedClass
 > = InstanceType<I>;
 
-export type TokenDescriptor = {
-  token?: Token<any>;
-  class: ScopedClass;
+type Newable<T = any> = new (...args: any[]) => T;
+
+type OptionalArgs<T, R = Required<T>> = R extends readonly [...infer Rest, infer Last]
+  ? R | OptionalArgs<Rest>
+  : [];
+
+type TokenType<T, R = any> = T extends Token<infer U> ? U : R;
+
+export type TokenValueDescriptor<T extends Token<any>> = {
+  token: T;
+  value: TokenType<T>;
+};
+
+export type TokenFactoryDescriptor<T extends Token<any>> = {
+  token: T;
+  factory: (container: Container, ...args: any[]) => TokenType<T>;
+};
+
+export type TokenClassDescriptor<T extends Token<any>> = {
+  token?: T;
+  class: Newable<TokenType<T>>;
   scope?: ScopeHandler;
 };
 
+export type AnyDescriptor =
+  | TokenValueDescriptor<any>
+  | TokenFactoryDescriptor<any>
+  | TokenClassDescriptor<any>;
+
 export type TokenOrClass = Token<any> | ScopedClass;
 
-export type TokenOrClassInstance<T extends TokenOrClass> = T extends Token<infer U>
-  ? U
-  : T extends ScopedClass
-  ? InstanceType<T>
-  : any;
+export type InstanceOf<T, C = TokenType<T, T>> = C extends Newable ? InstanceType<C> : C;
 
-export interface IContainer {
-  inject<T extends TokenOrClass, Args extends any[]>(
-    cls: T,
-    ...args: Args
-  ): TokenOrClassInstance<T>;
-
-  injectAsync<T extends TokenOrClass, Args extends any[]>(
-    cls: T,
-    ...args: Args
-  ): Promise<TokenOrClassInstance<T>>;
-
-  childContainer(name?: string): Container;
-
-  register(tokenDescriptor: TokenDescriptor): void;
-
-  unregister(token: Token<any> | ScopedClass): void;
-
-  reset(): void;
-}
+export type ArgsOf<T, C = TokenType<T, T>> = C extends Newable
+  ? OptionalArgs<ConstructorParameters<C>>
+  : any[];

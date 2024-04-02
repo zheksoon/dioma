@@ -1,45 +1,50 @@
-import type {
-  ScopedClass,
-  TokenDescriptor,
-  ScopeHandler,
-  IContainer,
-  TokenOrClass,
-  TokenOrClassInstance,
-} from "./types";
-import { Scopes } from "./scopes";
-import { Token } from "./token";
 import {
-  AsyncCycleDependencyError,
-  CycleDependencyError,
+  AsyncDependencyCycleError,
+  DependencyCycleError,
   TokenNotRegisteredError,
 } from "./errors";
+import { Scopes } from "./scopes";
+import { Token } from "./token";
+import type {
+  AnyDescriptor,
+  ArgsOf,
+  InstanceOf,
+  ScopeHandler,
+  ScopedClass,
+  TokenClassDescriptor,
+  TokenFactoryDescriptor,
+  TokenOrClass,
+  TokenValueDescriptor,
+} from "./types";
 
-type TokenDescriptorWithContainer = TokenDescriptor & {
+type DescriptorWithContainer = AnyDescriptor & {
   container: Container;
 };
 
 const MAX_LOOP_COUNT = 100;
 
-export class Container implements IContainer {
+export class Container {
   private instances = new WeakMap();
 
   private resolutionContainer: Container | null = null;
 
   private resolutionSet = new Set<TokenOrClass>();
 
-  private pendingPromiseMap = new Map<TokenOrClass, Promise<InstanceType<ScopedClass>>>();
+  private pendingPromiseMap = new Map<TokenOrClass, Promise<InstanceType<any>>>();
 
-  private tokenDescriptorMap = new Map<TokenOrClass, TokenDescriptorWithContainer>();
+  private tokenDescriptorMap = new Map<TokenOrClass, DescriptorWithContainer>();
 
-  constructor(private parentContainer: Container | null = null, public name?: string) {}
+  private resolutionsLoopCounter = 0;
 
-  loopCounter = 0;
+  constructor(private parentContainer: Container | null = null, public name?: string) {
+    this.register = this.register.bind(this);
+  }
 
   childContainer = (name?: string) => {
     return new Container(this, name);
   };
 
-  getInstance(cls: any, args: any[] = []) {
+  public __getInstance(cls: any, args: any[] = []) {
     let instance = null;
     let container: Container | null = this;
 
@@ -58,45 +63,64 @@ export class Container implements IContainer {
   }
 
   private getTokenDescriptor(
-    clsOrToken: ScopedClass | Token<any>
-  ): TokenDescriptorWithContainer | undefined {
-    let tokenDescriptor = this.tokenDescriptorMap.get(clsOrToken);
+    clsOrToken: TokenOrClass
+  ): DescriptorWithContainer | undefined {
+    let tokenDescriptor;
+    let container: Container | null = this;
 
-    if (!tokenDescriptor && this.parentContainer) {
-      tokenDescriptor = this.parentContainer.getTokenDescriptor(clsOrToken);
+    while (!tokenDescriptor && container) {
+      tokenDescriptor = container.tokenDescriptorMap.get(clsOrToken);
+      container = container.parentContainer;
     }
 
     return tokenDescriptor;
   }
 
-  injectImpl<T extends TokenOrClass, Args extends any[]>(
+  private injectImpl<T extends TokenOrClass, Args extends ArgsOf<T>>(
     clsOrToken: T,
     args: Args,
     resolutionContainer = this.resolutionContainer
-  ): TokenOrClassInstance<T> {
+  ): InstanceOf<T> {
     this.resolutionContainer = resolutionContainer || new Container();
 
-    let cls = clsOrToken as ScopedClass;
+    let cls = clsOrToken as TokenOrClass;
+
     let scope: ScopeHandler;
-    let container: Container | null = this;
+
+    let container: Container = this;
 
     const descriptor = this.getTokenDescriptor(clsOrToken);
 
-    if (descriptor) {
-      container = descriptor.container;
-      cls = descriptor.class;
-      scope = descriptor.scope || cls.scope || Scopes.Transient();
-    } else {
+    if (!descriptor) {
       if (clsOrToken instanceof Token) {
         throw new TokenNotRegisteredError();
       }
 
+      cls = clsOrToken;
+
       scope = cls.scope || Scopes.Transient();
+
+      container = this;
+    } else {
+      if ("class" in descriptor) {
+        cls = descriptor.class as ScopedClass;
+
+        scope = descriptor.scope || cls.scope || Scopes.Transient();
+
+        container = descriptor.container;
+      } else if ("value" in descriptor) {
+        return descriptor.value;
+      } else if ("factory" in descriptor) {
+        // @ts-ignore
+        return descriptor.factory(container, ...args);
+      } else {
+        throw new Error("Invalid descriptor");
+      }
     }
 
     try {
       if (this.resolutionSet.has(clsOrToken)) {
-        throw new CycleDependencyError();
+        throw new DependencyCycleError();
       }
 
       this.resolutionSet.add(clsOrToken);
@@ -104,35 +128,36 @@ export class Container implements IContainer {
       return scope(cls, args, container, this.resolutionContainer);
     } finally {
       this.resolutionSet.delete(clsOrToken);
+
       this.resolutionContainer = resolutionContainer;
 
       if (!resolutionContainer) {
-        this.loopCounter = 0;
+        this.resolutionsLoopCounter = 0;
       }
     }
   }
 
-  inject = <T extends TokenOrClass, Args extends any[]>(
+  inject = <T extends TokenOrClass, Args extends ArgsOf<T>>(
     cls: T,
     ...args: Args
-  ): TokenOrClassInstance<T> => {
+  ): InstanceOf<T> => {
     return this.injectImpl(cls, args, undefined);
   };
 
-  injectAsync = <T extends TokenOrClass, Args extends any[]>(
+  injectAsync = <T extends TokenOrClass, Args extends ArgsOf<T>>(
     cls: T,
     ...args: Args
-  ): Promise<TokenOrClassInstance<T>> => {
+  ): Promise<InstanceOf<T>> => {
     const resolutionContainer = this.resolutionContainer;
 
-    this.loopCounter += 1;
+    this.resolutionsLoopCounter += 1;
 
-    if (this.loopCounter > MAX_LOOP_COUNT) {
-      throw new AsyncCycleDependencyError();
+    if (this.resolutionsLoopCounter > MAX_LOOP_COUNT) {
+      throw new AsyncDependencyCycleError();
     }
 
     if (this.pendingPromiseMap.has(cls)) {
-      return this.pendingPromiseMap.get(cls) as Promise<TokenOrClassInstance<T>>;
+      return this.pendingPromiseMap.get(cls) as Promise<InstanceOf<T>>;
     }
 
     if (this.instances.has(cls)) {
@@ -152,20 +177,32 @@ export class Container implements IContainer {
     return promise;
   };
 
-  register = (tokenDescriptor: TokenDescriptor): void => {
+  register<T extends Token<any>>(descriptor: TokenValueDescriptor<T>): void;
+
+  register<T extends Token<any>>(descriptor: TokenFactoryDescriptor<T>): void;
+
+  register<T extends Token<any>>(descriptor: TokenClassDescriptor<T>): void;
+
+  register(tokenDescriptor: any): void {
     const token = tokenDescriptor.token || tokenDescriptor.class;
 
     const descriptorWithContainer = { ...tokenDescriptor, container: this };
 
     this.tokenDescriptorMap.set(token, descriptorWithContainer);
-  };
 
-  unregister = (token: TokenOrClass) => {
+    if (tokenDescriptor.class) {
+      this.tokenDescriptorMap.set(token.class, descriptorWithContainer);
+    }
+  }
+
+  unregister = (token: TokenOrClass): void => {
     const descriptor = this.getTokenDescriptor(token);
 
     this.tokenDescriptorMap.delete(token);
+    this.instances.delete(token);
 
-    if (descriptor) {
+    if (descriptor && "class" in descriptor) {
+      this.tokenDescriptorMap.delete(descriptor.class as ScopedClass);
       this.instances.delete(descriptor.class);
     }
   };
@@ -176,7 +213,7 @@ export class Container implements IContainer {
     this.pendingPromiseMap.clear();
     this.tokenDescriptorMap.clear();
     this.resolutionContainer = null;
-    this.loopCounter = 0;
+    this.resolutionsLoopCounter = 0;
   };
 }
 

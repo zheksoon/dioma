@@ -1,5 +1,5 @@
-import { ArgumentsError } from "./errors";
 import { globalContainer } from "./container";
+import { ArgumentsError } from "./errors";
 import type { ScopeHandler } from "./types";
 
 export class Scopes {
@@ -9,7 +9,7 @@ export class Scopes {
         throw new ArgumentsError(SingletonScope.name, cls.name);
       }
 
-      return globalContainer.getInstance(cls);
+      return globalContainer.__getInstance(cls);
     };
   }
 
@@ -25,13 +25,13 @@ export class Scopes {
         throw new ArgumentsError(ContainerScope.name, cls.name);
       }
 
-      return container.getInstance(cls);
+      return container.__getInstance(cls);
     };
   }
 
   public static Resolution(): ScopeHandler {
     return function ResolutionScope(cls, args, _, resolutionContainer) {
-      return resolutionContainer.getInstance(cls, args);
+      return resolutionContainer.__getInstance(cls, args);
     };
   }
 

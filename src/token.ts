@@ -1,5 +1,3 @@
-import type { ScopedClass } from "./types";
-
-export class Token<T extends InstanceType<ScopedClass>> {
+export class Token<T> {
   constructor(public readonly name?: string) {}
 }

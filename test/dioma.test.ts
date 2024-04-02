@@ -3,14 +3,15 @@ import {
   Scopes,
   inject,
   globalContainer,
-  CycleDependencyError,
-  AsyncCycleDependencyError,
+  DependencyCycleError,
+  AsyncDependencyCycleError,
   injectAsync,
   ArgumentsError,
   Token,
   ScopedClass,
 } from "../src";
 import { describe, it, expect, beforeEach } from "vitest";
+import { ScopeHandler } from "../src/types";
 
 const delay = (ms: number = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -46,16 +47,16 @@ describe("Dioma", () => {
 
     it("should be able to inject instance from parent container", () => {
       class ParentClass {
-        static scope = Scopes.Scoped();
+        static scope = Scopes.Container();
       }
 
       const parentContainer = new Container();
 
-      const instance1 = parentContainer.getInstance(ParentClass);
+      const instance1 = parentContainer.inject(ParentClass);
 
       const childContainer = parentContainer.childContainer();
 
-      const instance2 = childContainer.getInstance(ParentClass);
+      const instance2 = childContainer.inject(ParentClass);
 
       expect(instance1).toBeInstanceOf(ParentClass);
 
@@ -310,7 +311,7 @@ describe("Dioma", () => {
         static scope = Scopes.Transient();
       }
 
-      expect(() => inject(CircularDependencyA)).toThrowError(CycleDependencyError);
+      expect(() => inject(CircularDependencyA)).toThrowError(DependencyCycleError);
     });
 
     it("should throw error when circular dependency is detected for container scope", () => {
@@ -329,7 +330,7 @@ describe("Dioma", () => {
       }
 
       expect(() => container.inject(CircularDependencyA)).toThrowError(
-        CycleDependencyError
+        DependencyCycleError
       );
     });
 
@@ -349,7 +350,7 @@ describe("Dioma", () => {
       const container = new Container();
 
       expect(() => container.inject(CircularDependencyA)).toThrowError(
-        CycleDependencyError
+        DependencyCycleError
       );
     });
 
@@ -366,7 +367,7 @@ describe("Dioma", () => {
         static scope = Scopes.Singleton();
       }
 
-      expect(() => inject(CircularDependencyA)).toThrowError(CycleDependencyError);
+      expect(() => inject(CircularDependencyA)).toThrowError(DependencyCycleError);
     });
 
     it("should throw error when circular dependency is detected for multiple classes", () => {
@@ -388,11 +389,11 @@ describe("Dioma", () => {
         static scope = Scopes.Transient();
       }
 
-      expect(() => inject(CircularDependencyA)).toThrowError(CycleDependencyError);
+      expect(() => inject(CircularDependencyA)).toThrowError(DependencyCycleError);
 
-      expect(() => inject(CircularDependencyB)).toThrowError(CycleDependencyError);
+      expect(() => inject(CircularDependencyB)).toThrowError(DependencyCycleError);
 
-      expect(() => inject(CircularDependencyC)).toThrowError(CycleDependencyError);
+      expect(() => inject(CircularDependencyC)).toThrowError(DependencyCycleError);
     });
   });
 
@@ -417,8 +418,8 @@ describe("Dioma", () => {
       class CircularDependencyB {
         declare instanceA: CircularDependencyA;
 
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise.then((instance) => {
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA.then((instance) => {
             this.instanceA = instance;
           });
         }
@@ -449,8 +450,8 @@ describe("Dioma", () => {
       class CircularDependencyA {
         public instanceB: CircularDependencyB;
 
-        constructor(instanceBPromise = injectAsync(CircularDependencyB)) {
-          instanceBPromise.then((instance) => {
+        constructor(private promiseB = injectAsync(CircularDependencyB)) {
+          this.promiseB.then((instance) => {
             this.instanceB = instance;
           });
         }
@@ -461,8 +462,8 @@ describe("Dioma", () => {
       class CircularDependencyB {
         public instanceA: CircularDependencyA;
 
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise.then((instance) => {
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA.then((instance) => {
             this.instanceA = instance;
           });
         }
@@ -479,23 +480,22 @@ describe("Dioma", () => {
       expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB.instanceA).toBe(instance);
 
-      // const instance2 = inject(CircularDependencyB);
+      const instance2 = inject(CircularDependencyB);
 
-      // await delay();
-      // await delay();
+      await delay();
 
-      // expect(instance2).toBeInstanceOf(CircularDependencyB);
-      // expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
-      // expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
-      // expect(instance2.instanceA.instanceB).toBe(instance2);
+      expect(instance2).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA.instanceB).toBe(instance2);
     });
 
     it("should be able to inject async for singleton scope (async cycle of 3)", async () => {
       class CircularDependencyA {
         public instanceB: CircularDependencyB;
 
-        constructor(instanceBPromise = injectAsync(CircularDependencyB)) {
-          instanceBPromise.then((instance) => {
+        constructor(private promiseB = injectAsync(CircularDependencyB)) {
+          this.promiseB.then((instance) => {
             this.instanceB = instance;
           });
         }
@@ -506,8 +506,8 @@ describe("Dioma", () => {
       class CircularDependencyB {
         public instanceC: CircularDependencyC;
 
-        constructor(instanceCPromise = injectAsync(CircularDependencyC)) {
-          instanceCPromise.then((instance) => {
+        constructor(private promiseC = injectAsync(CircularDependencyC)) {
+          this.promiseC.then((instance) => {
             this.instanceC = instance;
           });
         }
@@ -518,8 +518,8 @@ describe("Dioma", () => {
       class CircularDependencyC {
         public instanceA: CircularDependencyA;
 
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise.then((instance) => {
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA.then((instance) => {
             this.instanceA = instance;
           });
         }
@@ -549,15 +549,13 @@ describe("Dioma", () => {
         public instanceC: CircularDependencyC;
 
         constructor(
-          instanceBPromise = injectAsync(CircularDependencyB),
-          instanceCPromise = injectAsync(CircularDependencyC)
+          private promiseB = injectAsync(CircularDependencyB),
+          private promiseC = injectAsync(CircularDependencyC)
         ) {
-          Promise.all([instanceBPromise, instanceCPromise]).then(
-            ([instanceB, instanceC]) => {
-              this.instanceB = instanceB;
-              this.instanceC = instanceC;
-            }
-          );
+          Promise.all([this.promiseB, this.promiseC]).then(([instanceB, instanceC]) => {
+            this.instanceB = instanceB;
+            this.instanceC = instanceC;
+          });
         }
 
         static scope = Scopes.Singleton();
@@ -568,15 +566,13 @@ describe("Dioma", () => {
         public instanceC: CircularDependencyC;
 
         constructor(
-          instanceCPromise = injectAsync(CircularDependencyC),
-          instanceAPromise = injectAsync(CircularDependencyA)
+          private promiseC = injectAsync(CircularDependencyC),
+          private promiseA = injectAsync(CircularDependencyA)
         ) {
-          Promise.all([instanceCPromise, instanceAPromise]).then(
-            ([instanceC, instanceA]) => {
-              this.instanceC = instanceC;
-              this.instanceA = instanceA;
-            }
-          );
+          Promise.all([this.promiseC, this.promiseA]).then(([instanceC, instanceA]) => {
+            this.instanceC = instanceC;
+            this.instanceA = instanceA;
+          });
         }
 
         static scope = Scopes.Singleton();
@@ -587,15 +583,13 @@ describe("Dioma", () => {
         public instanceB: CircularDependencyB;
 
         constructor(
-          instanceAPromise = injectAsync(CircularDependencyA),
-          instanceBPromise = injectAsync(CircularDependencyB)
+          private promiseA = injectAsync(CircularDependencyA),
+          private promiseB = injectAsync(CircularDependencyB)
         ) {
-          Promise.all([instanceAPromise, instanceBPromise]).then(
-            ([instanceA, instanceB]) => {
-              this.instanceA = instanceA;
-              this.instanceB = instanceB;
-            }
-          );
+          Promise.all([this.promiseA, this.promiseB]).then(([instanceA, instanceB]) => {
+            this.instanceA = instanceA;
+            this.instanceB = instanceB;
+          });
         }
 
         static scope = Scopes.Singleton();
@@ -629,8 +623,8 @@ describe("Dioma", () => {
       class CircularDependencyB {
         declare instanceA: CircularDependencyA;
 
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise.then((instance) => {
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA.then((instance) => {
             this.instanceA = instance;
           });
         }
@@ -664,8 +658,8 @@ describe("Dioma", () => {
       class CircularDependencyA {
         public instanceB: CircularDependencyB;
 
-        constructor(instanceBPromise = injectAsync(CircularDependencyB)) {
-          instanceBPromise.then((instance) => {
+        constructor(private promiseB = injectAsync(CircularDependencyB)) {
+          this.promiseB.then((instance) => {
             this.instanceB = instance;
           });
         }
@@ -676,8 +670,8 @@ describe("Dioma", () => {
       class CircularDependencyB {
         declare instanceA: CircularDependencyA;
 
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise.then((instance) => {
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA.then((instance) => {
             this.instanceA = instance;
           });
         }
@@ -714,8 +708,8 @@ describe("Dioma", () => {
       class CircularDependencyB {
         declare instanceA: CircularDependencyA;
 
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise.then((instance) => {
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA.then((instance) => {
             this.instanceA = instance;
           });
         }
@@ -746,7 +740,7 @@ describe("Dioma", () => {
       expect(instance2.instanceA.instanceB).not.toBe(instance2);
     });
 
-    it("should be able to inject async for multiple transient classes", async () => {
+    it("should be able to inject async for multiple transient classes (with unexpected loop)", async () => {
       class CircularDependencyA {
         constructor(public instanceB = inject(CircularDependencyB)) {}
 
@@ -762,8 +756,8 @@ describe("Dioma", () => {
       class CircularDependencyC {
         public instanceA: CircularDependencyA;
 
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise.then((instance) => {
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA.then((instance) => {
             this.instanceA = instance;
           });
         }
@@ -771,7 +765,7 @@ describe("Dioma", () => {
         static scope = Scopes.Transient();
       }
 
-      const instance = inject(CircularDependencyA);
+      const instance = await injectAsync(CircularDependencyA);
 
       await delay();
 
@@ -780,11 +774,10 @@ describe("Dioma", () => {
       expect(instance.instanceB.instanceC).toBeInstanceOf(CircularDependencyC);
       expect(instance.instanceB.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
 
-      expect(instance.instanceB.instanceC.instanceA).not.toBe(instance);
-      expect(instance.instanceB.instanceC.instanceA.instanceB).not.toBe(
-        instance.instanceB
-      );
-      expect(instance.instanceB.instanceC.instanceA.instanceB.instanceC).not.toBe(
+      // unexpected loops
+      expect(instance.instanceB.instanceC.instanceA).toBe(instance);
+      expect(instance.instanceB.instanceC.instanceA.instanceB).toBe(instance.instanceB);
+      expect(instance.instanceB.instanceC.instanceA.instanceB.instanceC).toBe(
         instance.instanceB.instanceC
       );
     });
@@ -796,8 +789,8 @@ describe("Dioma", () => {
       class CircularDependencyA {
         public instanceB: CircularDependencyB;
 
-        constructor(instanceBPromise = injectAsync(CircularDependencyB)) {
-          instanceBPromise
+        constructor(private promiseB = injectAsync(CircularDependencyB)) {
+          this.promiseB
             .then((instance) => {
               this.instanceB = instance;
             })
@@ -812,8 +805,8 @@ describe("Dioma", () => {
       class CircularDependencyB {
         declare instanceA: CircularDependencyA;
 
-        constructor(instanceAPromise = injectAsync(CircularDependencyA)) {
-          instanceAPromise
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA
             .then((instance) => {
               this.instanceA = instance;
             })
@@ -825,11 +818,11 @@ describe("Dioma", () => {
         static scope = Scopes.Transient();
       }
 
-      const instance = inject(CircularDependencyA);
+      const instance = await injectAsync(CircularDependencyA);
 
       await delay();
 
-      expect(errorA).toBeInstanceOf(AsyncCycleDependencyError);
+      expect(errorA).toBeInstanceOf(AsyncDependencyCycleError);
       expect(errorB).toBe(null);
     });
 
@@ -845,10 +838,8 @@ describe("Dioma", () => {
       class CircularDependencyB {
         declare instanceA: CircularDependencyA;
 
-        constructor(
-          public instanceAPromise = container.injectAsync(CircularDependencyA)
-        ) {
-          instanceAPromise.then((instance) => {
+        constructor(public promiseA = container.injectAsync(CircularDependencyA)) {
+          promiseA.then((instance) => {
             this.instanceA = instance;
           });
         }
@@ -862,14 +853,36 @@ describe("Dioma", () => {
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBe(instance);
 
-      // const instance2 = container.inject(CircularDependencyB);
+      const instance2 = container.inject(CircularDependencyB);
 
-      // await delay();
-      // await delay();
+      await delay();
 
-      // expect(instance2).toBeInstanceOf(CircularDependencyB);
-      // expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBe(instance2);
+    });
+
+    it("should resolve async self-dependency correctly", async () => {
+      class CircularDependencyA {
+        public instanceA: CircularDependencyA;
+
+        constructor(private promiseA = injectAsync(CircularDependencyA)) {
+          this.promiseA.then((instance) => {
+            this.instanceA = instance;
+          });
+        }
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = await injectAsync(CircularDependencyA);
+
+      await delay();
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceA).toBe(instance);
     });
   });
 
@@ -982,7 +995,7 @@ describe("Dioma", () => {
 
     it("should be able to inject async with arguments (loop)", async () => {
       class ClassA {
-        constructor(public value: string, public instanceB = inject(ClassB, "hello")) {}
+        constructor(public number: number, public instanceB = inject(ClassB, "hello")) {}
 
         static scope = Scopes.Resolution();
       }
@@ -990,7 +1003,10 @@ describe("Dioma", () => {
       class ClassB {
         public instanceA: ClassA;
 
-        constructor(public value: string, aPromise = injectAsync(ClassA, "world")) {
+        constructor(
+          public value: string,
+          aPromise: Promise<ClassA> = injectAsync(ClassA, 123)
+        ) {
           aPromise.then((instance) => {
             this.instanceA = instance;
           });
@@ -1007,7 +1023,7 @@ describe("Dioma", () => {
       expect(instanceB.value).toBe("test");
 
       expect(instanceB.instanceA).toBeInstanceOf(ClassA);
-      expect(instanceB.instanceA.value).toBe("world");
+      expect(instanceB.instanceA.number).toBe(123);
     });
   });
 
@@ -1063,300 +1079,444 @@ describe("Dioma", () => {
         container = new Container(null, "parent");
       });
 
-      it("should be able to inject token", () => {
-        class TokenClass {
-          constructor() {}
+      describe("Class Tokens", () => {
+        it("should be able to inject token", () => {
+          class TokenClass {
+            constructor() {}
 
-          static scope = Scopes.Transient();
-        }
-
-        const token = new Token<TokenClass>();
-
-        container.register({ token, class: TokenClass });
-
-        const instance = container.inject(token);
-
-        expect(instance).toBeInstanceOf(TokenClass);
-      });
-
-      it("should be able to inject token with arguments", () => {
-        class TokenClass {
-          constructor(public value: string) {}
-
-          static scope = Scopes.Transient();
-        }
-
-        const token = new Token<TokenClass>();
-
-        container.register({ token, class: TokenClass });
-
-        const instance = container.inject(token, "test");
-
-        expect(instance).toBeInstanceOf(TokenClass);
-        expect(instance.value).toBe("test");
-      });
-
-      it("should throw error when token is not registered", () => {
-        const token = new Token();
-
-        expect(() => container.inject(token)).toThrowError();
-      });
-
-      it("should be able to inject token from base class", () => {
-        const token = new Token();
-
-        class TokenClass {
-          static scope = Scopes.Container();
-        }
-
-        container.register({ token, class: TokenClass });
-
-        const childContainer = container.childContainer("child");
-
-        const instance = childContainer.inject(token);
-
-        const instance2 = container.inject(token);
-
-        expect(instance).toBeInstanceOf(TokenClass);
-
-        expect(instance2).toBe(instance);
-
-        container.unregister(token);
-
-        const instance3 = childContainer.inject(TokenClass);
-
-        expect(instance3).toBeInstanceOf(TokenClass);
-
-        expect(instance3).not.toBe(instance);
-      });
-
-      it("should be able to inject registered class", () => {
-        class RegisterClass {
-          constructor() {}
-
-          static scope = Scopes.Container();
-        }
-
-        container.register({ class: RegisterClass });
-
-        const instance = container.inject(RegisterClass);
-
-        expect(instance).toBeInstanceOf(RegisterClass);
-      });
-
-      it("should be able to inject registered class on parent container", () => {
-        class RegisterClass {
-          constructor() {}
-
-          static scope = Scopes.Container();
-        }
-
-        container.register({ class: RegisterClass });
-
-        const childContainer = container.childContainer("child");
-
-        const instance = childContainer.inject(RegisterClass);
-
-        expect(instance).toBeInstanceOf(RegisterClass);
-
-        const instance2 = container.inject(RegisterClass);
-
-        expect(instance2).toBe(instance);
-
-        container.unregister(RegisterClass);
-
-        const instance3 = childContainer.inject(RegisterClass);
-
-        expect(instance3).toBeInstanceOf(RegisterClass);
-
-        expect(instance3).not.toBe(instance);
-      });
-
-      it("should be able to inject token in async loop", async () => {
-        class A {
-          constructor(public instanceB = container.inject(B)) {}
-
-          static scope = Scopes.Container();
-        }
-
-        class B {
-          declare instanceA: A;
-
-          constructor(promiseA = container.injectAsync(A)) {
-            promiseA.then((instance) => {
-              this.instanceA = instance;
-            });
+            static scope = Scopes.Transient();
           }
 
-          static scope = Scopes.Container();
-        }
+          const token = new Token<TokenClass>();
 
-        const tokenA = new Token<A>();
-        const tokenB = new Token<B>();
+          container.register({ token, class: TokenClass });
 
-        container.register({ token: tokenA, class: A });
-        container.register({ token: tokenB, class: B });
+          const instance = container.inject(token);
 
-        const instance = container.inject(tokenA);
+          expect(instance).toBeInstanceOf(TokenClass);
+        });
 
-        expect(instance).toBeInstanceOf(A);
+        it("should be able to inject token with arguments", () => {
+          class TokenClass {
+            constructor(public value: string) {}
 
-        await delay();
-
-        expect(instance.instanceB).toBeInstanceOf(B);
-        expect(instance.instanceB.instanceA).toBeInstanceOf(A);
-        expect(instance.instanceB.instanceA).toBe(instance);
-
-        const instance2 = container.inject(tokenB);
-
-        expect(instance2).toBeInstanceOf(B);
-
-        await delay();
-
-        expect(instance2.instanceA).toBeInstanceOf(A);
-        expect(instance2.instanceA.instanceB).toBeInstanceOf(B);
-        expect(instance2.instanceA.instanceB).toBe(instance2);
-      });
-
-      it("should be able to injectAsync token in async loop", async () => {
-        class A {
-          constructor(public instanceB = container.inject(B)) {}
-
-          static scope = Scopes.Container();
-        }
-
-        class B {
-          declare instanceA: A;
-
-          constructor(promiseA = container.injectAsync(A)) {
-            promiseA.then((instance) => {
-              this.instanceA = instance;
-            });
+            static scope = Scopes.Transient();
           }
 
-          static scope = Scopes.Container();
-        }
+          const token = new Token<TokenClass>();
 
-        const tokenA = new Token<A>();
-        const tokenB = new Token<B>();
+          container.register({ token, class: TokenClass });
 
-        container.register({ token: tokenA, class: A });
-        container.register({ token: tokenB, class: B });
+          const instance = container.inject(token, "test");
 
-        const instance = await container.injectAsync(tokenA);
+          expect(instance).toBeInstanceOf(TokenClass);
+          expect(instance.value).toBe("test");
+        });
 
-        expect(instance).toBeInstanceOf(A);
+        it("should throw error when token is not registered", () => {
+          const token = new Token();
 
-        await delay();
+          expect(() => container.inject(token)).toThrowError();
+        });
 
-        expect(instance.instanceB).toBeInstanceOf(B);
-        expect(instance.instanceB.instanceA).toBeInstanceOf(A);
-        expect(instance.instanceB.instanceA).toBe(instance);
-
-        const instance2 = await container.injectAsync(tokenB);
-
-        expect(instance2).toBeInstanceOf(B);
-
-        await delay();
-
-        expect(instance2.instanceA).toBeInstanceOf(A);
-        expect(instance2.instanceA.instanceB).toBeInstanceOf(B);
-        expect(instance2.instanceA.instanceB).toBe(instance2);
-      });
-
-      it("should be able to inject token in async loop", async () => {
-        class A {
-          constructor(public instanceB = container.inject(tokenB)) {}
-
-          static scope = Scopes.Container();
-        }
-
-        class B {
-          declare instanceA: A;
-
-          constructor(promiseA = container.injectAsync(tokenA)) {
-            promiseA.then((instance) => {
-              this.instanceA = instance;
-            });
+        it("should be able to inject token from base class", () => {
+          class TokenClass {
+            static scope = Scopes.Container();
           }
 
-          static scope = Scopes.Container();
-        }
+          const token = new Token<TokenClass>();
 
-        const tokenA = new Token<A>();
-        const tokenB = new Token<B>();
+          container.register({ token, class: TokenClass });
 
-        container.register({ token: tokenA, class: A });
-        container.register({ token: tokenB, class: B });
+          const childContainer = container.childContainer("child");
 
-        const instance = container.inject(tokenA);
+          const instance = childContainer.inject(token);
 
-        expect(instance).toBeInstanceOf(A);
+          const instance2 = container.inject(token);
 
-        await delay();
+          expect(instance).toBeInstanceOf(TokenClass);
 
-        expect(instance.instanceB).toBeInstanceOf(B);
-        expect(instance.instanceB.instanceA).toBeInstanceOf(A);
-        expect(instance.instanceB.instanceA).toBe(instance);
+          expect(instance2).toBe(instance);
+
+          container.unregister(token);
+
+          const instance3 = childContainer.inject(TokenClass);
+
+          expect(instance3).toBeInstanceOf(TokenClass);
+
+          expect(instance3).not.toBe(instance);
+        });
+
+        it("should be able to inject registered class", () => {
+          class RegisterClass {
+            constructor() {}
+
+            static scope = Scopes.Container();
+          }
+
+          container.register({ class: RegisterClass });
+
+          const instance = container.inject(RegisterClass);
+
+          expect(instance).toBeInstanceOf(RegisterClass);
+        });
+
+        it("should be able to inject registered class on parent container", () => {
+          class RegisterClass {
+            constructor() {}
+
+            static scope = Scopes.Container();
+          }
+
+          container.register({ class: RegisterClass });
+
+          const childContainer = container.childContainer("child");
+
+          const instance = childContainer.inject(RegisterClass);
+
+          expect(instance).toBeInstanceOf(RegisterClass);
+
+          const instance2 = container.inject(RegisterClass);
+
+          expect(instance2).toBe(instance);
+
+          container.unregister(RegisterClass);
+
+          const instance3 = childContainer.inject(RegisterClass);
+
+          expect(instance3).toBeInstanceOf(RegisterClass);
+
+          expect(instance3).not.toBe(instance);
+        });
+
+        it("should be able to inject token in async loop", async () => {
+          class A {
+            constructor(public instanceB = container.inject(B)) {}
+
+            static scope = Scopes.Container();
+          }
+
+          class B {
+            declare instanceA: A;
+
+            constructor(private promiseA = container.injectAsync(A)) {
+              this.promiseA.then((instance) => {
+                this.instanceA = instance;
+              });
+            }
+
+            static scope = Scopes.Container();
+          }
+
+          const tokenA = new Token<A>();
+          const tokenB = new Token<B>();
+
+          container.register({ token: tokenA, class: A });
+          container.register({ token: tokenB, class: B });
+
+          const instance = container.inject(tokenA);
+
+          expect(instance).toBeInstanceOf(A);
+
+          await delay();
+
+          expect(instance.instanceB).toBeInstanceOf(B);
+          expect(instance.instanceB.instanceA).toBeInstanceOf(A);
+          expect(instance.instanceB.instanceA).toBe(instance);
+
+          const instance2 = container.inject(tokenB);
+
+          expect(instance2).toBeInstanceOf(B);
+
+          await delay();
+
+          expect(instance2.instanceA).toBeInstanceOf(A);
+          expect(instance2.instanceA.instanceB).toBeInstanceOf(B);
+          expect(instance2.instanceA.instanceB).toBe(instance2);
+        });
+
+        it("should be able to injectAsync token in async loop", async () => {
+          class A {
+            constructor(public instanceB = container.inject(B)) {}
+
+            static scope = Scopes.Container();
+          }
+
+          class B {
+            declare instanceA: A;
+
+            constructor(private promiseA = container.injectAsync(A)) {
+              this.promiseA.then((instance) => {
+                this.instanceA = instance;
+              });
+            }
+
+            static scope = Scopes.Container();
+          }
+
+          const tokenA = new Token<A>();
+          const tokenB = new Token<B>();
+
+          container.register({ token: tokenA, class: A });
+          container.register({ token: tokenB, class: B });
+
+          const instance = await container.injectAsync(tokenA);
+
+          expect(instance).toBeInstanceOf(A);
+
+          await delay();
+
+          expect(instance.instanceB).toBeInstanceOf(B);
+          expect(instance.instanceB.instanceA).toBeInstanceOf(A);
+          expect(instance.instanceB.instanceA).toBe(instance);
+
+          const instance2 = await container.injectAsync(tokenB);
+
+          expect(instance2).toBeInstanceOf(B);
+
+          await delay();
+
+          expect(instance2.instanceA).toBeInstanceOf(A);
+          expect(instance2.instanceA.instanceB).toBeInstanceOf(B);
+          expect(instance2.instanceA.instanceB).toBe(instance2);
+        });
+
+        it("should be able to inject token in async loop", async () => {
+          class A {
+            constructor(public instanceB = container.inject(tokenB)) {}
+
+            static scope = Scopes.Container();
+          }
+
+          class B {
+            declare instanceA: A;
+
+            constructor(private promiseA = container.injectAsync(tokenA)) {
+              promiseA.then((instance) => {
+                this.instanceA = instance;
+              });
+            }
+
+            static scope = Scopes.Container();
+          }
+
+          const tokenA = new Token<A>();
+          const tokenB = new Token<B>();
+
+          container.register({ token: tokenA, class: A });
+          container.register({ token: tokenB, class: B });
+
+          const instance = container.inject(tokenA);
+
+          expect(instance).toBeInstanceOf(A);
+
+          await delay();
+
+          expect(instance.instanceB).toBeInstanceOf(B);
+          expect(instance.instanceB.instanceA).toBeInstanceOf(A);
+          expect(instance.instanceB.instanceA).toBe(instance);
+        });
+
+        it("should get the same instance of inject token and class", () => {
+          class TokenClass {
+            constructor() {}
+
+            static scope = Scopes.Container();
+          }
+
+          const token = new Token<TokenClass>();
+
+          container.register({ token, class: TokenClass });
+
+          const instance = container.inject(token);
+          const instance2 = container.inject(TokenClass);
+
+          expect(instance).toBe(instance2);
+        });
+
+        it("should unregister token", () => {
+          class TokenClass {
+            constructor() {}
+
+            static scope = Scopes.Container();
+          }
+
+          const token = new Token<TokenClass>();
+
+          container.register({ token, class: TokenClass });
+
+          const instance = container.inject(token);
+
+          expect(instance).toBeInstanceOf(TokenClass);
+
+          container.unregister(token);
+
+          expect(() => container.inject(token)).toThrowError();
+        });
+
+        it("should unregister token from parent container", () => {
+          class TokenClass {
+            constructor() {}
+
+            static scope = Scopes.Container();
+          }
+
+          const token = new Token<TokenClass>();
+
+          container.register({ token, class: TokenClass });
+
+          const childContainer = container.childContainer("child");
+
+          const instance = childContainer.inject(token);
+
+          expect(instance).toBeInstanceOf(TokenClass);
+
+          container.unregister(token);
+
+          expect(() => childContainer.inject(token)).toThrowError();
+        });
       });
 
-      it("should get the same instance of inject token and class", () => {
-        class TokenClass {
-          constructor() {}
+      describe("Value Tokens", () => {
+        it("should be able to inject token with value", () => {
+          const token = new Token<string>();
 
-          static scope = Scopes.Container();
-        }
+          container.register({ token, value: "test" });
 
-        const token = new Token<TokenClass>();
+          const value = container.inject(token);
 
-        container.register({ token, class: TokenClass });
+          expect(value).toBe("test");
+        });
 
-        const instance = container.inject(token);
-        const instance2 = container.inject(TokenClass);
+        it("should be able to inject token with value (object)", () => {
+          const token = new Token<{ value: string }>();
 
-        expect(instance).toBe(instance2);
+          const value = { value: "test" };
+
+          container.register({ token, value });
+
+          const injected = container.inject(token);
+
+          expect(injected).toBe(value);
+        });
+
+        it("should be able to inject token with value from parent container", () => {
+          const token = new Token<string>();
+
+          container.register({ token, value: "test" });
+
+          const childContainer = container.childContainer("child");
+
+          const value = childContainer.inject(token);
+
+          expect(value).toBe("test");
+        });
+
+        it("should be able to unregister value token", () => {
+          const token = new Token<string>();
+
+          container.register({ token, value: "test" });
+
+          const value = container.inject(token);
+
+          expect(value).toBe("test");
+
+          container.unregister(token);
+
+          expect(() => container.inject(token)).toThrowError();
+        });
       });
 
-      it("should unregister token", () => {
-        class TokenClass {
-          constructor() {}
+      describe("Factory Tokens", () => {
+        it("should be able to inject token with factory", () => {
+          const token = new Token<string>();
 
-          static scope = Scopes.Container();
-        }
+          container.register({ token, factory: () => "test" });
 
-        const token = new Token<TokenClass>();
+          const value = container.inject(token);
 
-        container.register({ token, class: TokenClass });
+          expect(value).toBe("test");
+        });
 
-        const instance = container.inject(token);
+        it("should be able to inject token with factory (object)", () => {
+          const token = new Token<{ value: string }>();
 
-        expect(instance).toBeInstanceOf(TokenClass);
+          const value = { value: "test" };
 
-        container.unregister(token);
+          container.register({ token, factory: () => value });
 
-        expect(() => container.inject(token)).toThrowError();
-      });
+          const injected = container.inject(token);
 
-      it("should unregister token from parent container", () => {
-        class TokenClass {
-          constructor() {}
+          expect(injected).toBe(value);
+        });
 
-          static scope = Scopes.Container();
-        }
+        it("should be able to inject token with factory from parent container", () => {
+          const token = new Token<string>();
 
-        const token = new Token<TokenClass>();
+          container.register({ token, factory: () => "test" });
 
-        container.register({ token, class: TokenClass });
+          const childContainer = container.childContainer("child");
 
-        const childContainer = container.childContainer("child");
+          const value = childContainer.inject(token);
 
-        const instance = childContainer.inject(token);
+          expect(value).toBe("test");
+        });
 
-        expect(instance).toBeInstanceOf(TokenClass);
+        it("should be able to inject token with factory with arguments", () => {
+          const token = new Token<string>();
 
-        container.unregister(token);
+          container.register({ token, factory: (container, value: string) => value });
 
-        expect(() => childContainer.inject(token)).toThrowError();
+          const value = container.inject(token, "test");
+
+          expect(value).toBe("test");
+        });
+
+        it("should be able to inject token with factory with arguments from parent container", () => {
+          const token = new Token<string>();
+
+          container.register({ token, factory: (container, value: string) => value });
+
+          const childContainer = container.childContainer("child");
+
+          const value = childContainer.inject(token, "test");
+
+          expect(value).toBe("test");
+        });
+
+        it("should be able to unregister factory token", () => {
+          const token = new Token<string>();
+
+          container.register({ token, factory: () => "test" });
+
+          const value = container.inject(token);
+
+          expect(value).toBe("test");
+
+          container.unregister(token);
+
+          expect(() => container.inject(token)).toThrowError();
+        });
+
+        it("should be able to inject factory when factory injects something else", () => {
+          class TokenClass {
+            constructor() {}
+
+            static scope = Scopes.Container();
+          }
+
+          // TODO: fix types
+          const token = new Token<unknown>();
+
+          container.register({
+            token,
+            factory: (container) => container.inject(TokenClass),
+          });
+
+          const value = container.inject(token);
+
+          expect(value).toBeInstanceOf(TokenClass);
+        });
       });
     });
   });

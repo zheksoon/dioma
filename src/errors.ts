@@ -1,10 +1,10 @@
-export class CycleDependencyError extends Error {
+export class DependencyCycleError extends Error {
   constructor() {
     super("Circular dependency detected");
   }
 }
 
-export class AsyncCycleDependencyError extends Error {
+export class AsyncDependencyCycleError extends Error {
   constructor() {
     super("Circular dependency detected in async resolution");
   }
