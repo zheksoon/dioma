@@ -1042,6 +1042,15 @@ describe("Dioma", () => {
       expect(instance).toBeInstanceOf(RegisterClass);
     });
 
+    it("should throw when invalid descriptor is injected", () => {
+      const token = new Token();
+
+      // @ts-expect-error
+      globalContainer.register({ token, something: "invalid" });
+
+      expect(() => inject(token)).toThrowError();
+    });
+
     it("should use registration scope if provided", () => {
       class RegisterClass {
         constructor() {}
