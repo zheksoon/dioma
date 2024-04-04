@@ -161,7 +161,7 @@ const car = container.inject(Car);
 car.park();
 ```
 
-Container scoped classes usually are [registered in the container](#class-registration) first. Without it, the class will "stick" to the container it's used in.
+Container-scoped classes usually are [registered in the container](#class-registration) first. Without it, the class will "stick" to the container it's used in.
 
 ### Resolution scope
 
@@ -269,12 +269,12 @@ To unregister a class, use the `unregister` method:
 container.unregister(FooBar);
 ```
 
-After the unregistration, the class will be removed from the container and all its child containers, and the next injection will return a new instance.
+After that, the class will be removed from the container and all its child containers, and the next injection will return a new instance.
 
 ## Injection with tokens
 
-Instead of passing a class the `inject`, you can use tokens instead.
-Tokens can be used for class, value, and factory injection.
+Instead of passing a class to the `inject`, you can use **tokens** instead.
+The token injection can be used for **class, value, and factory** injection.
 Here's detailed information about each type.
 
 ### Class tokens
@@ -326,6 +326,7 @@ const wildAnimal = wild.inject(animalToken);
 // Returns Cat instance
 const zooAnimal = zoo.inject(animalToken);
 ```
+
 </details>
 
 The class token registration can also override the scope of the class:
@@ -340,8 +341,6 @@ Value tokens are useful to inject a constant value:
 
 ```typescript
 import { Token } from "dioma";
-
-const container = new Container();
 
 const token = new Token<string>("Value token");
 
@@ -359,8 +358,6 @@ The factory takes the current container as the first argument and returns a valu
 
 ```typescript
 import { Token } from "dioma";
-
-const container = new Container();
 
 const token = new Token<string>("Factory token");
 
@@ -469,8 +466,8 @@ class B {
 const a = await injectAsync(A);
 const b = await injectAsync(B);
 
-// All cycles are resolved on the next tick
-await new Promise((resolve) => setTimeout(resolve, 0));
+// Wait until all promises are resolved
+await globalContainer.waitAsync();
 
 a.doWork();
 b.doAnotherWork();
@@ -480,9 +477,9 @@ b.doAnotherWork();
 
 Async injection has an undefined behavior when there is a loop with transient dependencies. It may return an instance with an unexpected loop, or throw the `Circular dependency detected in async resolution` error, so it's better to avoid such cases.
 
-As defined in the code above, you need to **wait for the next tick** to get all instance promises resolved, even if you use `await injectAsync(...)`.
+As defined in the code above, you need to use `container.waitAsync()` or **wait for the next tick** to get all instance promises resolved, even if you use `await injectAsync(...)`.
 
-Generally, if you expect your dependency to have an async resolution, it's better to inject it with `injectAsync`, as in the example above. But, you can also use `inject` for async injection as long as you wait for the next tick after it.
+Generally, if you expect your dependency to have an async resolution, it's better to inject it with `injectAsync`, as in the example above. But, you can also use `inject` for async injection as long as you wait for it as above.
 
 Tokens also can be used for async injection as well:
 
@@ -550,6 +547,10 @@ Injects the instance of the class or token, and provides arguments to the constr
 
 Injects the promise of the instance of the class or token, and provides arguments to the constructor or factory function.
 
+### `container.waitAsync()`
+
+Returns a promise that resolves when all current async injections are resolved.
+
 ### `container.register({ class, token?, scope? })`
 
 ### `container.register({ token, value })`
@@ -560,7 +561,7 @@ Registers the class, value, or factory with the token in the container.
 
 ### `container.unregister(classOrToken)`
 
-Unregisters the class or token from the container.
+Unregister the class or token from the container.
 
 ### `container.childContainer(name?)`
 

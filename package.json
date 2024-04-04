@@ -1,6 +1,6 @@
 {
   "name": "dioma",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
   "license": "MIT",
   "repository": {

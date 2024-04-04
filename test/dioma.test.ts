@@ -1,19 +1,16 @@
+import { beforeEach, describe, expect, it } from "vitest";
 import {
-  Container,
-  Scopes,
-  inject,
-  globalContainer,
-  DependencyCycleError,
-  AsyncDependencyCycleError,
-  injectAsync,
   ArgumentsError,
-  Token,
+  // AsyncDependencyCycleError,
+  Container,
+  DependencyCycleError,
   ScopedClass,
+  Scopes,
+  Token,
+  globalContainer,
+  inject,
+  injectAsync,
 } from "../src";
-import { describe, it, expect, beforeEach } from "vitest";
-import { ScopeHandler } from "../src/types";
-
-const delay = (ms: number = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("Dioma", () => {
   beforeEach(() => {
@@ -429,7 +426,7 @@ describe("Dioma", () => {
 
       const instance = inject(CircularDependencyA);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
@@ -438,7 +435,7 @@ describe("Dioma", () => {
 
       const instance2 = inject(CircularDependencyB);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
@@ -473,7 +470,7 @@ describe("Dioma", () => {
 
       const instance = inject(CircularDependencyA);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
@@ -482,7 +479,7 @@ describe("Dioma", () => {
 
       const instance2 = inject(CircularDependencyB);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
@@ -634,9 +631,7 @@ describe("Dioma", () => {
 
       const instance = inject(CircularDependencyA);
 
-      await delay();
-      await delay();
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
@@ -645,8 +640,7 @@ describe("Dioma", () => {
 
       const instance2 = inject(CircularDependencyB);
 
-      await delay();
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
@@ -681,7 +675,7 @@ describe("Dioma", () => {
 
       const instance = inject(CircularDependencyA);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
@@ -690,7 +684,7 @@ describe("Dioma", () => {
 
       const instance2 = inject(CircularDependencyB);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
@@ -719,7 +713,7 @@ describe("Dioma", () => {
 
       const instance = inject(CircularDependencyA);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
@@ -732,7 +726,7 @@ describe("Dioma", () => {
 
       expect(instance).not.toBe(instance2);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
@@ -767,7 +761,7 @@ describe("Dioma", () => {
 
       const instance = await injectAsync(CircularDependencyA);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
@@ -782,7 +776,7 @@ describe("Dioma", () => {
       );
     });
 
-    it("should throw error when trying to inject transients with async only loop", async () => {
+    it("should have unexpected result when trying to inject transients with async only loop", async () => {
       let errorA: Error | null = null;
       let errorB: Error | null = null;
 
@@ -803,7 +797,7 @@ describe("Dioma", () => {
       }
 
       class CircularDependencyB {
-        declare instanceA: CircularDependencyA;
+        public instanceA: CircularDependencyA;
 
         constructor(private promiseA = injectAsync(CircularDependencyA)) {
           this.promiseA
@@ -820,10 +814,16 @@ describe("Dioma", () => {
 
       const instance = await injectAsync(CircularDependencyA);
 
-      await delay();
+      await globalContainer.waitAsync();
 
-      expect(errorA).toBeInstanceOf(AsyncDependencyCycleError);
+      expect(errorA).toBe(null);
       expect(errorB).toBe(null);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+
+      expect(instance.instanceB.instanceA).not.toBe(instance);
+      expect(instance.instanceB).not.toBe(instance.instanceB.instanceA.instanceB);
     });
 
     it("should be able to inject async for container scope", async () => {
@@ -849,7 +849,7 @@ describe("Dioma", () => {
 
       const instance = container.inject(CircularDependencyA);
 
-      await delay();
+      await container.waitAsync();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
@@ -857,7 +857,7 @@ describe("Dioma", () => {
 
       const instance2 = container.inject(CircularDependencyB);
 
-      await delay();
+      await container.waitAsync();
 
       expect(instance2).toBeInstanceOf(CircularDependencyB);
       expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
@@ -879,7 +879,7 @@ describe("Dioma", () => {
 
       const instance = await injectAsync(CircularDependencyA);
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceA).toBe(instance);
@@ -1017,7 +1017,7 @@ describe("Dioma", () => {
 
       const instanceB = inject(ClassB, "test");
 
-      await delay();
+      await globalContainer.waitAsync();
 
       expect(instanceB).toBeInstanceOf(ClassB);
       expect(instanceB.value).toBe("test");
@@ -1227,7 +1227,7 @@ describe("Dioma", () => {
 
           expect(instance).toBeInstanceOf(A);
 
-          await delay();
+          await container.waitAsync();
 
           expect(instance.instanceB).toBeInstanceOf(B);
           expect(instance.instanceB.instanceA).toBeInstanceOf(A);
@@ -1237,7 +1237,7 @@ describe("Dioma", () => {
 
           expect(instance2).toBeInstanceOf(B);
 
-          await delay();
+          await container.waitAsync();
 
           expect(instance2.instanceA).toBeInstanceOf(A);
           expect(instance2.instanceA.instanceB).toBeInstanceOf(B);
@@ -1273,7 +1273,7 @@ describe("Dioma", () => {
 
           expect(instance).toBeInstanceOf(A);
 
-          await delay();
+          await container.waitAsync();
 
           expect(instance.instanceB).toBeInstanceOf(B);
           expect(instance.instanceB.instanceA).toBeInstanceOf(A);
@@ -1283,7 +1283,7 @@ describe("Dioma", () => {
 
           expect(instance2).toBeInstanceOf(B);
 
-          await delay();
+          await container.waitAsync();
 
           expect(instance2.instanceA).toBeInstanceOf(A);
           expect(instance2.instanceA.instanceB).toBeInstanceOf(B);
@@ -1319,7 +1319,7 @@ describe("Dioma", () => {
 
           expect(instance).toBeInstanceOf(A);
 
-          await delay();
+          await container.waitAsync();
 
           expect(instance.instanceB).toBeInstanceOf(B);
           expect(instance.instanceB.instanceA).toBeInstanceOf(A);

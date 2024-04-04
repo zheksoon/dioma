@@ -44,7 +44,7 @@ export class Container {
     return new Container(this, name);
   };
 
-  public __getInstance(cls: any, args: any[] = []) {
+  public $getInstance(cls: any, args: any[] = []) {
     let instance = null;
     let container: Container | null = this;
 
@@ -175,6 +175,10 @@ export class Container {
     this.pendingPromiseMap.set(cls, promise);
 
     return promise;
+  };
+
+  waitAsync = async () => {
+    await Promise.all(this.pendingPromiseMap.values());
   };
 
   register<T extends Token<any>>(descriptor: TokenValueDescriptor<T>): void;

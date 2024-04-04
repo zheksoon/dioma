@@ -9,7 +9,7 @@ export class Scopes {
         throw new ArgumentsError(SingletonScope.name, cls.name);
       }
 
-      return globalContainer.__getInstance(cls);
+      return globalContainer.$getInstance(cls);
     };
   }
 
@@ -25,13 +25,13 @@ export class Scopes {
         throw new ArgumentsError(ContainerScope.name, cls.name);
       }
 
-      return container.__getInstance(cls);
+      return container.$getInstance(cls);
     };
   }
 
   public static Resolution(): ScopeHandler {
     return function ResolutionScope(cls, args, _, resolutionContainer) {
-      return resolutionContainer.__getInstance(cls, args);
+      return resolutionContainer.$getInstance(cls, args);
     };
   }
 
