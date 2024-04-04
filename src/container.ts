@@ -178,7 +178,10 @@ export class Container {
   };
 
   waitAsync = async () => {
-    await Promise.all(this.pendingPromiseMap.values());
+    // // The solution doesn't work correctly in all cases
+    // // because at the moment of the call not all promises are in the map
+    // await Promise.all(this.pendingPromiseMap.values());
+    return new Promise<void>((resolve) => setTimeout(resolve, 0));
   };
 
   register<T extends Token<any>>(descriptor: TokenValueDescriptor<T>): void;

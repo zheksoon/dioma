@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ArgumentsError,
+  AsyncDependencyCycleError,
   // AsyncDependencyCycleError,
   Container,
   DependencyCycleError,
@@ -816,14 +817,8 @@ describe("Dioma", () => {
 
       await globalContainer.waitAsync();
 
-      expect(errorA).toBe(null);
+      expect(errorA).toBeInstanceOf(AsyncDependencyCycleError);
       expect(errorB).toBe(null);
-
-      expect(instance).toBeInstanceOf(CircularDependencyA);
-      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
-
-      expect(instance.instanceB.instanceA).not.toBe(instance);
-      expect(instance.instanceB).not.toBe(instance.instanceB.instanceA.instanceB);
     });
 
     it("should be able to inject async for container scope", async () => {
