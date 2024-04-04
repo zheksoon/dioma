@@ -326,8 +326,7 @@ const wildAnimal = wild.inject(animalToken);
 // Returns Cat instance
 const zooAnimal = zoo.inject(animalToken);
 ```
-
-</detals>
+</details>
 
 The class token registration can also override the scope of the class:
 
