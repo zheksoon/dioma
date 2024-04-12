@@ -1521,6 +1521,19 @@ describe("Dioma", () => {
 
           expect(value).toBeInstanceOf(TokenClass);
         });
+
+        it("should throw error when there is a circular dependency", () => {
+          const token = new Token<string>();
+
+          container.register({
+            token,
+            factory: (container, value: string) => container.inject(token),
+          });
+
+          expect(() => container.inject(token, "test")).toThrowError(
+            DependencyCycleError
+          );
+        });
       });
     });
   });

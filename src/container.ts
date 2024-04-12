@@ -83,47 +83,47 @@ export class Container {
   ): InstanceOf<T> {
     this.resolutionContainer = resolutionContainer || new Container();
 
-    let cls = clsOrToken as TokenOrClass;
-
-    let scope: ScopeHandler;
-
-    let container: Container = this;
-
-    const descriptor = this.getTokenDescriptor(clsOrToken);
-
-    if (!descriptor) {
-      if (clsOrToken instanceof Token) {
-        throw new TokenNotRegisteredError();
-      }
-
-      cls = clsOrToken;
-
-      scope = cls.scope || Scopes.Transient();
-
-      container = this;
-    } else {
-      if ("class" in descriptor) {
-        cls = descriptor.class as ScopedClass;
-
-        scope = descriptor.scope || cls.scope || Scopes.Transient();
-
-        container = descriptor.container;
-      } else if ("value" in descriptor) {
-        return descriptor.value;
-      } else if ("factory" in descriptor) {
-        // @ts-ignore
-        return descriptor.factory(container, ...args);
-      } else {
-        throw new Error("Invalid descriptor");
-      }
-    }
-
     try {
       if (this.resolutionSet.has(clsOrToken)) {
         throw new DependencyCycleError();
       }
 
+      let cls = clsOrToken as TokenOrClass;
+
+      let scope: ScopeHandler;
+
+      let container: Container = this;
+
+      const descriptor = this.getTokenDescriptor(clsOrToken);
+
       this.resolutionSet.add(clsOrToken);
+
+      if (!descriptor) {
+        if (clsOrToken instanceof Token) {
+          throw new TokenNotRegisteredError();
+        }
+
+        cls = clsOrToken;
+
+        scope = cls.scope || Scopes.Transient();
+
+        container = this;
+      } else {
+        if ("class" in descriptor) {
+          cls = descriptor.class as ScopedClass;
+
+          scope = descriptor.scope || cls.scope || Scopes.Transient();
+
+          container = descriptor.container;
+        } else if ("value" in descriptor) {
+          return descriptor.value;
+        } else if ("factory" in descriptor) {
+          // @ts-ignore
+          return descriptor.factory(container, ...args);
+        } else {
+          throw new Error("Invalid descriptor");
+        }
+      }
 
       return scope(cls, args, container, this.resolutionContainer);
     } finally {
