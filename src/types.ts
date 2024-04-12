@@ -27,17 +27,22 @@ type OptionalArgs<T, R = Required<T>> = R extends readonly [...infer Rest, infer
 
 type TokenType<T, R = any> = T extends Token<infer U> ? U : R;
 
-export type TokenValueDescriptor<T extends Token<any>> = {
+type BaseDescriptor = {
+  beforeInject?: (container: Container, descriptor: AnyDescriptor, args: any[]) => any;
+  beforeConstruct?: (container: Container, descriptor: AnyDescriptor, args: any[]) => any;
+};
+
+export type TokenValueDescriptor<T extends Token<any>> = BaseDescriptor & {
   token: T;
   value: TokenType<T>;
 };
 
-export type TokenFactoryDescriptor<T extends Token<any>> = {
+export type TokenFactoryDescriptor<T extends Token<any>> = BaseDescriptor & {
   token: T;
   factory: (container: Container, ...args: any[]) => TokenType<T>;
 };
 
-export type TokenClassDescriptor<T extends Token<any>> = {
+export type TokenClassDescriptor<T extends Token<any>> = BaseDescriptor & {
   token?: T;
   class: Newable<TokenType<T>>;
   scope?: ScopeHandler;

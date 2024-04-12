@@ -4,34 +4,34 @@ import type { ScopeHandler } from "./types";
 
 export class Scopes {
   public static Singleton(): ScopeHandler {
-    return function SingletonScope(cls, args) {
+    return function SingletonScope(descriptor, args) {
       if (args.length > 0) {
-        throw new ArgumentsError(SingletonScope.name, cls.name);
+        throw new ArgumentsError(SingletonScope.name, descriptor.class.name);
       }
 
-      return globalContainer.$getInstance(cls);
+      return globalContainer.$getInstance(descriptor);
     };
   }
 
   public static Transient(): ScopeHandler {
-    return function TransientScope(cls, args) {
-      return new cls(...args);
+    return function TransientScope(descriptor, args, container) {
+      return container.$getInstance(descriptor, args, false);
     };
   }
 
   public static Container(): ScopeHandler {
-    return function ContainerScope(cls, args, container) {
+    return function ContainerScope(descriptor, args, container) {
       if (args.length > 0) {
-        throw new ArgumentsError(ContainerScope.name, cls.name);
+        throw new ArgumentsError(ContainerScope.name, descriptor.class.name);
       }
 
-      return container.$getInstance(cls);
+      return container.$getInstance(descriptor);
     };
   }
 
   public static Resolution(): ScopeHandler {
-    return function ResolutionScope(cls, args, _, resolutionContainer) {
-      return resolutionContainer.$getInstance(cls, args);
+    return function ResolutionScope(descriptor, args, _, resolutionContainer) {
+      return resolutionContainer.$getInstance(descriptor, args);
     };
   }
 

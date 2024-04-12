@@ -44,9 +44,15 @@ export class Container {
     return new Container(this, name);
   };
 
-  public $getInstance(cls: any, args: any[] = []) {
+  public $getInstance(
+    descriptor: TokenClassDescriptor<any>,
+    args: any[] = [],
+    cache = true
+  ) {
     let instance = null;
     let container: Container | null = this;
+
+    const cls = descriptor.class;
 
     while (!instance && container) {
       instance = container.instances.get(cls);
@@ -54,9 +60,15 @@ export class Container {
     }
 
     if (!instance) {
+      if (descriptor.beforeConstruct) {
+        descriptor.beforeConstruct(this, descriptor, args);
+      }
+
       instance = new cls(...args);
 
-      this.instances.set(cls, instance);
+      if (cache) {
+        this.instances.set(cls, instance);
+      }
     }
 
     return instance;
@@ -94,7 +106,7 @@ export class Container {
 
       let container: Container = this;
 
-      const descriptor = this.getTokenDescriptor(clsOrToken);
+      let descriptor = this.getTokenDescriptor(clsOrToken);
 
       this.resolutionSet.add(clsOrToken);
 
@@ -104,16 +116,17 @@ export class Container {
         }
 
         cls = clsOrToken;
-
         scope = cls.scope || Scopes.Transient();
-
         container = this;
+        descriptor = { class: cls, container: this };
       } else {
+        if (descriptor.beforeInject) {
+          descriptor.beforeInject(container, descriptor, args);
+        }
+
         if ("class" in descriptor) {
           cls = descriptor.class as ScopedClass;
-
           scope = descriptor.scope || cls.scope || Scopes.Transient();
-
           container = descriptor.container;
         } else if ("value" in descriptor) {
           return descriptor.value;
@@ -125,10 +138,9 @@ export class Container {
         }
       }
 
-      return scope(cls, args, container, this.resolutionContainer);
+      return scope(descriptor, args, container, this.resolutionContainer);
     } finally {
       this.resolutionSet.delete(clsOrToken);
-
       this.resolutionContainer = resolutionContainer;
 
       if (!resolutionContainer) {

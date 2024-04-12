@@ -12,6 +12,8 @@ import {
   inject,
   injectAsync,
 } from "../src";
+import { AnyDescriptor } from "../src/types";
+import { c } from "vite/dist/node/types.d-aGj9QkWt";
 
 describe("Dioma", () => {
   beforeEach(() => {
@@ -1533,6 +1535,272 @@ describe("Dioma", () => {
           expect(() => container.inject(token, "test")).toThrowError(
             DependencyCycleError
           );
+        });
+      });
+
+      describe("beforeInject", () => {
+        it("should be able to use beforeInject for class injection with token", () => {
+          class TokenClass {
+            constructor(public value: string) {}
+
+            static scope = Scopes.Transient();
+          }
+
+          const token = new Token<TokenClass>();
+
+          let called = false;
+          let containerArg: Container | null = null;
+          let descriptorArg: AnyDescriptor | null = null;
+          let argsArg: any[] | null = null;
+
+          container.register({
+            token,
+            class: TokenClass,
+            beforeInject: (container, descriptor, args) => {
+              called = true;
+              containerArg = container;
+              descriptorArg = descriptor;
+              argsArg = args;
+            },
+          });
+
+          const instance = container.inject(token, "test");
+
+          expect(called).toBe(true);
+          expect(containerArg).toBe(container);
+          // @ts-expect-error
+          expect(descriptorArg.class).toBe(TokenClass);
+          expect(argsArg).toEqual(["test"]);
+        });
+
+        it("should be able to use beforeInject for class injection with class", () => {
+          class TokenClass {
+            constructor(public value: string) {}
+
+            static scope = Scopes.Transient();
+          }
+
+          let called = false;
+          let containerArg: Container | null = null;
+          let descriptorArg: AnyDescriptor | null = null;
+          let argsArg: any[] | null = null;
+
+          container.register({
+            class: TokenClass,
+            beforeInject: (container, descriptor, args) => {
+              called = true;
+              containerArg = container;
+              descriptorArg = descriptor;
+              argsArg = args;
+            },
+          });
+
+          const instance = container.inject(TokenClass, "test");
+
+          expect(called).toBe(true);
+          expect(containerArg).toBe(container);
+          // @ts-expect-error
+          expect(descriptorArg.class).toBe(TokenClass);
+          expect(argsArg).toEqual(["test"]);
+        });
+
+        it("should be able to use beforeInject for value injection", () => {
+          const token = new Token<string>();
+
+          let called = false;
+          let containerArg: Container | null = null;
+          let descriptorArg: AnyDescriptor | null = null;
+          let argsArg: any[] | null = null;
+
+          container.register({
+            token,
+            value: "test",
+            beforeInject: (container, descriptor, args) => {
+              called = true;
+              containerArg = container;
+              descriptorArg = descriptor;
+              argsArg = args;
+            },
+          });
+
+          const value = container.inject(token);
+
+          expect(called).toBe(true);
+          expect(containerArg).toBe(container);
+          // @ts-expect-error
+          expect(descriptorArg.value).toBe("test");
+          expect(argsArg).toEqual([]);
+        });
+
+        it("should be able to use beforeInject for factory injection", () => {
+          const token = new Token<string>();
+
+          let called = false;
+          let containerArg: Container | null = null;
+          let descriptorArg: AnyDescriptor | null = null;
+          let argsArg: any[] | null = null;
+
+          container.register({
+            token,
+            factory: (container, a: string) => a + "!",
+            beforeInject: (container, descriptor, args) => {
+              called = true;
+              containerArg = container;
+              descriptorArg = descriptor;
+              argsArg = args;
+            },
+          });
+
+          const value = container.inject(token, "test");
+
+          expect(called).toBe(true);
+          expect(containerArg).toBe(container);
+          // @ts-expect-error
+          expect(descriptorArg.factory).toBeDefined();
+          expect(argsArg).toEqual(["test"]);
+        });
+      });
+
+      describe("beforeConstruct", () => {
+        it("should be able to use beforeConstruct for class injection (transient scope)", () => {
+          class TokenClass {
+            constructor(public value: string) {}
+
+            static scope = Scopes.Transient();
+          }
+
+          let called = false;
+          let containerArg: Container | null = null;
+          let descriptorArg: AnyDescriptor | null = null;
+          let argsArg: any[] | null = null;
+
+          container.register({
+            class: TokenClass,
+            beforeConstruct: (container, descriptor, args) => {
+              called = true;
+              containerArg = container;
+              descriptorArg = descriptor;
+              argsArg = args;
+            },
+          });
+
+          const instance = container.inject(TokenClass, "test");
+
+          expect(called).toBe(true);
+          expect(containerArg).toBe(container);
+          // @ts-expect-error
+          expect(descriptorArg.class).toBe(TokenClass);
+          expect(argsArg).toEqual(["test"]);
+
+          const instance2 = container.inject(TokenClass, "test2");
+          expect(instance2).not.toBe(instance);
+          expect(argsArg).toEqual(["test2"]);
+        });
+
+        it("should be able to use beforeConstruct for class injection (singleton scope)", () => {
+          class TokenClass {
+            constructor(public value: string) {}
+
+            static scope = Scopes.Singleton();
+          }
+
+          let called = 0;
+          let containerArg: Container | null = null;
+          let descriptorArg: AnyDescriptor | null = null;
+          let argsArg: any[] | null = null;
+
+          container.register({
+            class: TokenClass,
+            beforeConstruct: (container, descriptor, args) => {
+              called += 1;
+              containerArg = container;
+              descriptorArg = descriptor;
+              argsArg = args;
+            },
+          });
+
+          const instance = container.inject(TokenClass);
+
+          expect(called).toBe(1);
+          expect(containerArg).toBe(globalContainer);
+          // @ts-expect-error
+          expect(descriptorArg.class).toBe(TokenClass);
+          expect(argsArg).toEqual([]);
+
+          const instance2 = container.inject(TokenClass);
+          expect(instance2).toBe(instance);
+          expect(called).toBe(1);
+        });
+
+        it("should be able to use beforeConstruct for class injection (container scope)", () => {
+          class TokenClass {
+            constructor(public value: string) {}
+
+            static scope = Scopes.Container();
+          }
+
+          let called = 0;
+          let containerArg: Container | null = null;
+          let descriptorArg: AnyDescriptor | null = null;
+          let argsArg: any[] | null = null;
+
+          container.register({
+            class: TokenClass,
+            beforeConstruct: (container, descriptor, args) => {
+              called += 1;
+              containerArg = container;
+              descriptorArg = descriptor;
+              argsArg = args;
+            },
+          });
+
+          const instance = container.inject(TokenClass);
+
+          expect(called).toBe(1);
+          expect(containerArg).toBe(container);
+          // @ts-expect-error
+          expect(descriptorArg.class).toBe(TokenClass);
+          expect(argsArg).toEqual([]);
+
+          const instance2 = container.inject(TokenClass);
+          expect(instance2).toBe(instance);
+          expect(called).toBe(1);
+        });
+
+        it("should be able to use beforeConstruct for class injection (resolution scope)", () => {
+          class TokenClass {
+            constructor(public value: string) {}
+
+            static scope = Scopes.Resolution();
+          }
+
+          let called = 0;
+          let containerArg: Container | null = null;
+          let descriptorArg: AnyDescriptor | null = null;
+          let argsArg: any[] | null = null;
+
+          container.register({
+            class: TokenClass,
+            beforeConstruct: (container, descriptor, args) => {
+              called += 1;
+              containerArg = container;
+              descriptorArg = descriptor;
+              argsArg = args;
+            },
+          });
+
+          const instance = container.inject(TokenClass, "test");
+
+          expect(called).toBe(1);
+          expect(containerArg).toBeInstanceOf(Container); // child resolution container is expected
+          expect(containerArg).not.toBe(container);
+          // @ts-expect-error
+          expect(descriptorArg.class).toBe(TokenClass);
+          expect(argsArg).toEqual(["test"]);
+
+          const instance2 = container.inject(TokenClass, "test2");
+          expect(instance2).not.toBe(instance);
+          expect(argsArg).toEqual(["test2"]);
         });
       });
     });
