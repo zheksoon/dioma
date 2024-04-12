@@ -1676,7 +1676,7 @@ describe("Dioma", () => {
 
           container.register({
             class: TokenClass,
-            beforeConstruct: (container, descriptor, args) => {
+            beforeCreate: (container, descriptor, args) => {
               called = true;
               containerArg = container;
               descriptorArg = descriptor;
@@ -1711,7 +1711,7 @@ describe("Dioma", () => {
 
           container.register({
             class: TokenClass,
-            beforeConstruct: (container, descriptor, args) => {
+            beforeCreate: (container, descriptor, args) => {
               called += 1;
               containerArg = container;
               descriptorArg = descriptor;
@@ -1746,7 +1746,7 @@ describe("Dioma", () => {
 
           container.register({
             class: TokenClass,
-            beforeConstruct: (container, descriptor, args) => {
+            beforeCreate: (container, descriptor, args) => {
               called += 1;
               containerArg = container;
               descriptorArg = descriptor;
@@ -1781,7 +1781,7 @@ describe("Dioma", () => {
 
           container.register({
             class: TokenClass,
-            beforeConstruct: (container, descriptor, args) => {
+            beforeCreate: (container, descriptor, args) => {
               called += 1;
               containerArg = container;
               descriptorArg = descriptor;

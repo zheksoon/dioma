@@ -29,7 +29,7 @@ type TokenType<T, R = any> = T extends Token<infer U> ? U : R;
 
 type BaseDescriptor = {
   beforeInject?: (container: Container, descriptor: AnyDescriptor, args: any[]) => any;
-  beforeConstruct?: (container: Container, descriptor: AnyDescriptor, args: any[]) => any;
+  beforeCreate?: (container: Container, descriptor: AnyDescriptor, args: any[]) => any;
 };
 
 export type TokenValueDescriptor<T extends Token<any>> = BaseDescriptor & {

@@ -419,6 +419,22 @@ const parentInstance = child.inject(ParentClass);
 const childInstance = child.inject(ChildClass);
 ```
 
+## Injection hooks
+
+When registering a class, you can provide hooks that will be called before the instance is created or injected:
+
+```typescript
+container.register({
+  class: MyClass,
+  beforeInject: (container, descriptor, args) => {
+    console.log("Before inject");
+  },
+  beforeCreate: (container, descriptor, args) => {
+    console.log("Before create");
+  },
+});
+```
+
 ## Async injection and circular dependencies
 
 When you have a circular dependency, there will be an error `Circular dependency detected`. To solve this problem, you can use async injection.

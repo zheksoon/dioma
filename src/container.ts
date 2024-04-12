@@ -60,8 +60,8 @@ export class Container {
     }
 
     if (!instance) {
-      if (descriptor.beforeConstruct) {
-        descriptor.beforeConstruct(this, descriptor, args);
+      if (descriptor.beforeCreate) {
+        descriptor.beforeCreate(this, descriptor, args);
       }
 
       instance = new cls(...args);
