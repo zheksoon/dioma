@@ -11,9 +11,9 @@ import {
   globalContainer,
   inject,
   injectAsync,
+  injectLazy,
 } from "../src";
 import { AnyDescriptor } from "../src/types";
-import { c } from "vite/dist/node/types.d-aGj9QkWt";
 
 describe("Dioma", () => {
   beforeEach(() => {
@@ -880,6 +880,425 @@ describe("Dioma", () => {
 
       expect(instance).toBeInstanceOf(CircularDependencyA);
       expect(instance.instanceA).toBe(instance);
+    });
+  });
+
+  describe("Lazy", () => {
+    it("should be able to inject lazy", async () => {
+      class AsyncClass {
+        static scope = Scopes.Transient();
+      }
+
+      const instance = injectLazy(AsyncClass);
+
+      expect(instance).toBeInstanceOf(AsyncClass);
+    });
+
+    it("should be able to inject lazy for singleton scope ", async () => {
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceB = inject(CircularDependencyB)) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyB {
+        random = Math.random();
+
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceA).toEqual(instance);
+
+      const instance2 = inject(CircularDependencyB);
+
+      expect(instance2).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA.instanceB).toBe(instance2);
+    });
+
+    it("should be able to inject lazy for singleton scope (both lazy)", async () => {
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceB = injectLazy(CircularDependencyB)) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyB {
+        random = Math.random();
+
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceA).toEqual(instance);
+
+      const instance2 = inject(CircularDependencyB);
+
+      expect(instance2).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA.instanceB).toEqual(instance2);
+    });
+
+    it("should be able to inject lazy for singleton scope (lazy cycle of 3)", async () => {
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceB = injectLazy(CircularDependencyB)) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyB {
+        random = Math.random();
+
+        constructor(public instanceC = injectLazy(CircularDependencyC)) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyC {
+        random = Math.random();
+
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceC).toBeInstanceOf(CircularDependencyC);
+      expect(instance.instanceB.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
+
+      expect(instance.instanceB.instanceC.instanceA).toEqual(instance);
+      expect(instance.instanceB.instanceC.instanceA.instanceB).toEqual(
+        instance.instanceB
+      );
+      expect(instance.instanceB.instanceC.instanceA.instanceB.instanceC).toEqual(
+        instance.instanceB.instanceC
+      );
+    });
+
+    it("should be able to inject lazy for singleton scope (star schema)", async () => {
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(
+          public instanceB = injectLazy(CircularDependencyB),
+          public instanceC = injectLazy(CircularDependencyC)
+        ) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyB {
+        random = Math.random();
+
+        constructor(
+          public instanceC = injectLazy(CircularDependencyC),
+          public instanceA = injectLazy(CircularDependencyA)
+        ) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      class CircularDependencyC {
+        random = Math.random();
+
+        constructor(
+          public instanceA = injectLazy(CircularDependencyA),
+          public instanceB = injectLazy(CircularDependencyB)
+        ) {}
+
+        static scope = Scopes.Singleton();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceC).toBeInstanceOf(CircularDependencyC);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceC).toBeInstanceOf(CircularDependencyC);
+      expect(instance.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceC.instanceB).toBeInstanceOf(CircularDependencyB);
+
+      expect(instance.instanceC.instanceA).toEqual(instance);
+      expect(instance.instanceB.instanceA).toEqual(instance);
+      expect(instance.instanceC.instanceB).toEqual(instance.instanceB);
+      expect(instance.instanceB.instanceC).toEqual(instance.instanceC);
+    });
+
+    it("should be able to inject lazy for resolution scope", async () => {
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceB = inject(CircularDependencyB)) {}
+
+        static scope = Scopes.Resolution();
+      }
+
+      class CircularDependencyB {
+        random = Math.random();
+
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Resolution();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceA).toEqual(instance);
+
+      const instance2 = inject(CircularDependencyB);
+
+      expect(instance2).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA.instanceB).toEqual(instance2);
+    });
+
+    it("should be able to inject lazy for resolution scope (both lazy)", async () => {
+      let id = 0;
+
+      class CircularDependencyA {
+        id = id++;
+
+        constructor(public instanceB = injectLazy(CircularDependencyB)) {
+          console.log("instanceA", this.id);
+        }
+
+        static scope = Scopes.Resolution();
+      }
+
+      class CircularDependencyB {
+        id = id++;
+
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {
+          console.log("instanceB", this.id);
+        }
+
+        static scope = Scopes.Resolution();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      // await globalContainer.waitAsync();
+
+      // console.log("instance id", instance.id);
+      // console.log("instanceB id", instance.instanceB.id);
+      // console.log("instanceB.instanceA id", instance.instanceB.instanceA.id);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      console.log("getting instanceB");
+      // expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      console.log("getting instanceB.instanceA");
+      // expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB.instanceA).toBe(instance);
+
+      // const instance2 = inject(CircularDependencyB);
+
+      // await globalContainer.waitAsync();
+
+      // expect(instance2).toBeInstanceOf(CircularDependencyB);
+      // expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      // expect(instance2.instanceA.instanceB).toBeInstanceOf(CircularDependencyB);
+      // expect(instance2.instanceA.instanceB).toBe(instance2);
+    });
+
+    it("should be able to inject lazy for transient scope", async () => {
+      class CircularDependencyA {
+        constructor(public instanceB = inject(CircularDependencyB)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      class CircularDependencyB {
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+
+      expect(() => {
+        expect(instance.instanceB).not.toBe(instance.instanceB.instanceA.instanceB);
+      }).toThrowError();
+    });
+
+    it("should be able to inject lazy for multiple transient classes (with unexpected loop)", async () => {
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceB = inject(CircularDependencyB)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      class CircularDependencyB {
+        random = Math.random();
+
+        constructor(public instanceC = inject(CircularDependencyC)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      class CircularDependencyC {
+        random = Math.random();
+
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceC).toBeInstanceOf(CircularDependencyC);
+      expect(instance.instanceB.instanceC.instanceA).toBeInstanceOf(CircularDependencyA);
+
+      // unexpected loops
+      expect(instance.instanceB.instanceC.instanceA).not.toBe(instance);
+      expect(instance.instanceB.instanceC.instanceA.instanceB).not.toBe(
+        instance.instanceB
+      );
+      expect(instance.instanceB.instanceC.instanceA.instanceB.instanceC).not.toBe(
+        instance.instanceB.instanceC
+      );
+
+      expect(() => {
+        // expect does deep inspection of the object when it does not match
+        // so this results in an infinite loop
+        expect(instance.instanceB.instanceC.instanceA).toBe(instance);
+      }).toThrowError();
+    });
+
+    it("should have unexpected result when trying to inject transients with lazy only loop", async () => {
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceB = injectLazy(CircularDependencyB)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      class CircularDependencyB {
+        random = Math.random();
+
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Transient();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toBeInstanceOf(CircularDependencyA);
+
+      expect(instance.instanceB.instanceA).not.toBe(instance);
+
+      expect(() => {
+        // expect does deep inspection of the object when it does not match
+        // so this results in an infinite loop
+        expect(instance.instanceB.instanceA).toBe(instance);
+      }).toThrowError();
+    });
+
+    it("should be able to inject lazy for container scope", async () => {
+      const container = new Container();
+
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceB = container.inject(CircularDependencyB)) {}
+
+        static scope = Scopes.Container();
+      }
+
+      class CircularDependencyB {
+        random = Math.random();
+
+        constructor(public instanceA = container.injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Container();
+      }
+
+      const instance = container.inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceB).toBeInstanceOf(CircularDependencyB);
+      expect(instance.instanceB.instanceA).toEqual(instance);
+
+      const instance2 = container.inject(CircularDependencyB);
+
+      expect(instance2).toBeInstanceOf(CircularDependencyB);
+      expect(instance2.instanceA).toBeInstanceOf(CircularDependencyA);
+      expect(instance2.instanceA.instanceB).toEqual(instance2);
+    });
+
+    it("should resolve lazy self-dependency correctly (container scope)", async () => {
+      const container = new Container();
+
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceA = container.injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Container();
+      }
+
+      const instance = container.inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceA).toEqual(instance);
+    });
+
+    it("should resolve lazy self-dependency correctly (resolution scope)", async () => {
+      class CircularDependencyA {
+        random = Math.random();
+
+        constructor(public instanceA = injectLazy(CircularDependencyA)) {}
+
+        static scope = Scopes.Resolution();
+      }
+
+      const instance = inject(CircularDependencyA);
+
+      expect(instance).toBeInstanceOf(CircularDependencyA);
+      expect(instance.instanceA).toEqual(instance);
     });
   });
 
