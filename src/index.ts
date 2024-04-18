@@ -4,6 +4,7 @@ export {
   globalContainer,
   inject,
   injectAsync,
+  injectLazy,
 } from "./container";
 export {
   ArgumentsError,

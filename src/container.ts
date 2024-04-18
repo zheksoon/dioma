@@ -16,6 +16,7 @@ import type {
   TokenOrClass,
   TokenValueDescriptor,
 } from "./types";
+import { proxyHandlers } from './proxy-handlers';
 
 type DescriptorWithContainer = AnyDescriptor & {
   container: Container;
@@ -156,6 +157,43 @@ export class Container {
     return this.injectImpl(cls, args, undefined);
   };
 
+  injectLazy = <T extends TokenOrClass, Args extends ArgsOf<T>>(
+    cls: () => T,
+    ...args: Args
+  ): InstanceOf<T> => {
+    let resolvedCLS: T | undefined;
+
+    const resolveCLS = () => {
+      if (!resolvedCLS)
+        resolvedCLS = cls()
+      return resolvedCLS;
+    }
+
+    const handler: Record<string, any> = {
+      get: (_: any, key: string | symbol) => {
+        const obj = this.injectImpl(resolveCLS(), args);
+        const value = obj[key];
+        return typeof value === 'function' ? value.bind(obj) : value;
+      },
+      set: (_: any, key: string | symbol, value: any) => {
+        const obj = this.injectImpl(resolveCLS(), args);
+        obj[key] = value;
+        return true;
+      }
+    };
+
+    proxyHandlers
+      .forEach((key) => {
+        handler[key] = (...handlerArgs: any[]) => {
+          const obj = this.injectImpl(resolveCLS(), args);
+          // @ts-ignore
+          return Reflect[key].apply(null, [obj, ...handlerArgs.slice(1)]);
+        };
+      });
+
+    return new Proxy({} as InstanceOf<T>, handler);
+  };
+
   injectAsync = <T extends TokenOrClass, Args extends ArgsOf<T>>(
     cls: T,
     ...args: Args
@@ -241,5 +279,7 @@ export const globalContainer = new Container(null, "Global container");
 export const inject = globalContainer.inject;
 
 export const injectAsync = globalContainer.injectAsync;
+
+export const injectLazy = globalContainer.injectLazy;
 
 export const childContainer = globalContainer.childContainer;
