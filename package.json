@@ -1,11 +1,16 @@
 {
   "name": "dioma",
-  "version": "0.4.3",
+  "version": "0.4.6",
   "description": "Elegant dependency injection container for vanilla JavaScript and TypeScript",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git@github.com:zheksoon/dioma.git"
+  },
+  "homepage": "https://github.com/zheksoon/dioma",
+  "author": {
+    "name": "Eugene Daragan",
+    "email": "zheksoon@gmail.com"
   },
   "keywords": [
     "di",
@@ -22,14 +27,19 @@
     "tsyringe"
   ],
   "type": "module",
-  "main": "dist/dioma.cjs",
+  "main": "dist/dioma.js",
   "module": "dist/dioma.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/dioma.js",
-      "require": "./dist/dioma.cjs",
-      "types": "./dist/index.d.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/dioma.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/dioma.cjs"
+      }
     }
   },
   "files": [
@@ -40,7 +50,7 @@
     "package.json"
   ],
   "scripts": {
-    "build": "vite build --minify=false --sourcemap=true",
+    "build": "vite build --minify=false --sourcemap=true && cp dist/index.d.ts dist/index.d.cts",
     "test": "vitest",
     "test:coverage": "vitest --coverage"
   },

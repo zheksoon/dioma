@@ -13,7 +13,6 @@ import {
   injectAsync,
 } from "../src";
 import { AnyDescriptor } from "../src/types";
-import { c } from "vite/dist/node/types.d-aGj9QkWt";
 
 describe("Dioma", () => {
   beforeEach(() => {
