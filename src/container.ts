@@ -16,13 +16,15 @@ import type {
   TokenOrClass,
   TokenValueDescriptor,
 } from "./types";
-import { proxyHandlers } from './proxy-handlers';
+import { proxyHandlers } from "./proxy-handlers";
+import { waitForMicrotaskEnd } from "./utils";
 
 type DescriptorWithContainer = AnyDescriptor & {
   container: Container;
 };
 
-const MAX_LOOP_COUNT = 100;
+const MAX_RESOLUTIONS_LOOP_COUNT = 100;
+const MAX_TRANSIENT_RESOLUTIONS_PER_TICK = 1000;
 
 export class Container {
   private instances = new WeakMap();
@@ -37,6 +39,8 @@ export class Container {
 
   private resolutionsLoopCounter = 0;
 
+  public resolutionsPerTickCount = new Map<TokenOrClass, number>();
+
   constructor(private parentContainer: Container | null = null, public name?: string) {
     this.register = this.register.bind(this);
   }
@@ -45,7 +49,7 @@ export class Container {
     return new Container(this, name);
   };
 
-  public $getInstance(
+  public $getOrCreateInstance(
     descriptor: TokenClassDescriptor<any>,
     args: any[] = [],
     cache = true
@@ -75,9 +79,7 @@ export class Container {
     return instance;
   }
 
-  private getTokenDescriptor(
-    clsOrToken: TokenOrClass
-  ): DescriptorWithContainer | undefined {
+  private getTokenDescriptor(clsOrToken: TokenOrClass): DescriptorWithContainer {
     let tokenDescriptor;
     let container: Container | null = this;
 
@@ -86,7 +88,33 @@ export class Container {
       container = container.parentContainer;
     }
 
+    if (!tokenDescriptor) {
+      if (clsOrToken instanceof Token) {
+        throw new TokenNotRegisteredError();
+      }
+
+      tokenDescriptor = { class: clsOrToken, container: this } as DescriptorWithContainer;
+    }
+
     return tokenDescriptor;
+  }
+
+  private checkResolutionsLoop(descriptor: TokenClassDescriptor<any>) {
+    const cls = descriptor.class as TokenOrClass;
+
+    const resolutionCount = this.resolutionsPerTickCount.get(cls) || 0;
+
+    if (resolutionCount > MAX_TRANSIENT_RESOLUTIONS_PER_TICK) {
+      throw new Error(
+        `Transient scope for class ${cls.name} was resolved too many times in one tick. This is likely an infinite loop.`
+      );
+    }
+
+    waitForMicrotaskEnd(() => {
+      this.resolutionsPerTickCount.clear();
+    });
+
+    this.resolutionsPerTickCount.set(cls, resolutionCount + 1);
   }
 
   private injectImpl<T extends TokenOrClass, Args extends ArgsOf<T>>(
@@ -94,7 +122,7 @@ export class Container {
     args: Args,
     resolutionContainer = this.resolutionContainer
   ): InstanceOf<T> {
-    this.resolutionContainer = resolutionContainer || new Container();
+    this.resolutionContainer = resolutionContainer || this.childContainer();
 
     try {
       if (this.resolutionSet.has(clsOrToken)) {
@@ -111,32 +139,21 @@ export class Container {
 
       this.resolutionSet.add(clsOrToken);
 
-      if (!descriptor) {
-        if (clsOrToken instanceof Token) {
-          throw new TokenNotRegisteredError();
-        }
+      if (descriptor.beforeInject) {
+        descriptor.beforeInject(container, descriptor, args);
+      }
 
-        cls = clsOrToken;
-        scope = cls.scope || Scopes.Transient();
-        container = this;
-        descriptor = { class: cls, container: this };
+      if ("class" in descriptor) {
+        cls = descriptor.class as ScopedClass;
+        scope = descriptor.scope || cls.scope || Scopes.Transient();
+        container = descriptor.container;
+      } else if ("value" in descriptor) {
+        return descriptor.value;
+      } else if ("factory" in descriptor) {
+        // @ts-ignore
+        return descriptor.factory(container, ...args);
       } else {
-        if (descriptor.beforeInject) {
-          descriptor.beforeInject(container, descriptor, args);
-        }
-
-        if ("class" in descriptor) {
-          cls = descriptor.class as ScopedClass;
-          scope = descriptor.scope || cls.scope || Scopes.Transient();
-          container = descriptor.container;
-        } else if ("value" in descriptor) {
-          return descriptor.value;
-        } else if ("factory" in descriptor) {
-          // @ts-ignore
-          return descriptor.factory(container, ...args);
-        } else {
-          throw new Error("Invalid descriptor");
-        }
+        throw new Error("Invalid descriptor");
       }
 
       return scope(descriptor, args, container, this.resolutionContainer);
@@ -158,38 +175,40 @@ export class Container {
   };
 
   injectLazy = <T extends TokenOrClass, Args extends ArgsOf<T>>(
-    cls: () => T,
+    cls: T,
     ...args: Args
   ): InstanceOf<T> => {
-    let resolvedCLS: T | undefined;
+    let instance: InstanceOf<T> | undefined;
 
-    const resolveCLS = () => {
-      if (!resolvedCLS)
-        resolvedCLS = cls()
-      return resolvedCLS;
+    const resolutionContainer = this.resolutionContainer;
+
+    let container: Container | null = resolutionContainer || this;
+
+    while (!instance && container) {
+      instance = container.instances.get(cls);
+      container = container.parentContainer;
     }
 
-    const handler: Record<string, any> = {
-      get: (_: any, key: string | symbol) => {
-        const obj = this.injectImpl(resolveCLS(), args);
-        const value = obj[key];
-        return typeof value === 'function' ? value.bind(obj) : value;
-      },
-      set: (_: any, key: string | symbol, value: any) => {
-        const obj = this.injectImpl(resolveCLS(), args);
-        obj[key] = value;
-        return true;
-      }
+    if (instance) {
+      return instance;
+    }
+
+    const createInstance = () => {
+      instance ||= this.injectImpl(cls, args, resolutionContainer);
+
+      return instance;
     };
 
-    proxyHandlers
-      .forEach((key) => {
-        handler[key] = (...handlerArgs: any[]) => {
-          const obj = this.injectImpl(resolveCLS(), args);
-          // @ts-ignore
-          return Reflect[key].apply(null, [obj, ...handlerArgs.slice(1)]);
-        };
-      });
+    const handler = proxyHandlers.reduce((acc, key) => {
+      acc[key] = (_instanceMock: any, ...handlerArgs: any[]) => {
+        const instance = createInstance();
+
+        // @ts-ignore
+        return Reflect[key](instance, ...handlerArgs);
+      };
+
+      return acc;
+    }, {} as Record<string, any>);
 
     return new Proxy({} as InstanceOf<T>, handler);
   };
@@ -202,7 +221,7 @@ export class Container {
 
     this.resolutionsLoopCounter += 1;
 
-    if (this.resolutionsLoopCounter > MAX_LOOP_COUNT) {
+    if (this.resolutionsLoopCounter > MAX_RESOLUTIONS_LOOP_COUNT) {
       throw new AsyncDependencyCycleError();
     }
 

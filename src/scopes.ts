@@ -9,13 +9,16 @@ export class Scopes {
         throw new ArgumentsError(SingletonScope.name, descriptor.class.name);
       }
 
-      return globalContainer.$getInstance(descriptor);
+      return globalContainer.$getOrCreateInstance(descriptor);
     };
   }
 
   public static Transient(): ScopeHandler {
     return function TransientScope(descriptor, args, container) {
-      return container.$getInstance(descriptor, args, false);
+      // @ts-ignore
+      container.checkResolutionsLoop(descriptor);
+
+      return container.$getOrCreateInstance(descriptor, args, false);
     };
   }
 
@@ -25,13 +28,13 @@ export class Scopes {
         throw new ArgumentsError(ContainerScope.name, descriptor.class.name);
       }
 
-      return container.$getInstance(descriptor);
+      return container.$getOrCreateInstance(descriptor);
     };
   }
 
   public static Resolution(): ScopeHandler {
     return function ResolutionScope(descriptor, args, _, resolutionContainer) {
-      return resolutionContainer.$getInstance(descriptor, args);
+      return resolutionContainer.$getOrCreateInstance(descriptor, args);
     };
   }
 
